@@ -1,0 +1,20 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.db
+selftrack.db
+.pytest_cache/
+.DS_Store
+
+# Android build outputs and caches
+android/.gradle/
+android/app/build/
+android/build/
+
+# iOS build outputs
+ios/Pods/
+ios/build/
+
+__pycache__/
+*.pyc

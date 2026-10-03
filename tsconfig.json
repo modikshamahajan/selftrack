@@ -1,0 +1,49 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "ESNext",
+    "lib": [
+      "es2017"
+    ],
+    "allowJs": true,
+    "jsx": "react-native",
+    "noEmit": true,
+    "isolatedModules": true,
+    "strict": true,
+    "moduleResolution": "bundler",
+    "baseUrl": "./",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@components/*": [
+        "src/components/*"
+      ],
+      "@screens/*": [
+        "src/screens/*"
+      ],
+      "@theme/*": [
+        "src/theme/*"
+      ],
+      "@navigation/*": [
+        "src/navigation/*"
+      ],
+      "@utils/*": [
+        "src/utils/*"
+      ]
+    },
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "src/**/*",
+    "App.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "babel.config.js",
+    "metro.config.js"
+  ],
+  "extends": "expo/tsconfig.base"
+}

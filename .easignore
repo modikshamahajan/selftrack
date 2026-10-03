@@ -1,0 +1,12 @@
+# Backend and docker
+backend/
+docker-compose.yml
+docker-start.sh
+docker-stop.sh
+selftrack.db
+.pytest_cache/
+
+# Development and cache
+.expo/
+dist/
+web-build/

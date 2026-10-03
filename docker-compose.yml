@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: selftrack-backend:latest
+    container_name: selftrack-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///app/data/selftrack.db
+      - SECRET_KEY=selftrack-ultra-secure-jwt-secret-key-2026-production
+      - OLLAMA_HOST=http://host.containers.internal:11434
+    volumes:
+      - selftrack_db:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  selftrack_db:
+    driver: local
