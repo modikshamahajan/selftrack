@@ -26,6 +26,7 @@ interface AuthState {
   deleteAccount: () => Promise<void>;
   updateUserXp: (newXp: number, newLevel?: number) => void;
   updateProfile: (updates: { name?: string; avatar_url?: string }) => Promise<UserProfile>;
+  continueAsGuest: () => Promise<UserProfile>;
   setUser: (user: UserProfile | null) => void;
 }
 
@@ -47,10 +48,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       if (savedProfile) {
-        set({ user: JSON.parse(savedProfile), token, isAuthenticated: true });
+        set({ user: JSON.parse(savedProfile), token, isAuthenticated: true, isLoading: false });
       }
 
-      // Re-verify with backend
+      // If guest mode, keep local session without network verification
+      if (token === 'local_guest_token') {
+        set({ isLoading: false });
+        return true;
+      }
+
+      // Re-verify with backend if network available
       try {
         const res = await api.get('/auth/me');
         if (res.data) {
@@ -65,6 +72,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ user: null, token: null, isAuthenticated: false, isLoading: false });
           return false;
         }
+        // If offline / network error, retain local authenticated state
       }
 
       set({ isLoading: false });
@@ -163,6 +171,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       throw error;
     }
+  },
+
+  continueAsGuest: async () => {
+    const guestUser: UserProfile = {
+      id: 'local_guest_user',
+      name: 'SelfTrack Explorer',
+      email: 'guest@selftrack.local',
+      total_xp: 350,
+      level: 1,
+      streak_count: 5,
+      interests: ['Fitness', 'Productivity', 'Mindfulness'],
+      goals: ['Build daily habits', 'Hydration tracking', 'Mental wellness'],
+    };
+    await AsyncStorage.setItem('userToken', 'local_guest_token');
+    await AsyncStorage.setItem('userProfile', JSON.stringify(guestUser));
+    await AsyncStorage.setItem('isGuestMode', 'true');
+    set({ user: guestUser, token: 'local_guest_token', isAuthenticated: true, isLoading: false });
+    return guestUser;
   },
 
   setUser: (user: UserProfile | null) => {

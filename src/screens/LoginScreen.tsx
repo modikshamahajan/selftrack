@@ -47,8 +47,14 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
     }
   };
 
-  const handleGoToHome = () => {
-    navigation.replace('MainTabs', { screen: 'Home' } as any);
+  const handleContinueAsGuest = async () => {
+    setIsLoading(true);
+    try {
+      await useAuthStore.getState().continueAsGuest();
+      navigation.replace('MainTabs');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleRequestResetCode = async () => {
@@ -226,9 +232,9 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
                 loading={isLoading}
               />
 
-              <TouchableOpacity style={styles.skipHomeButton} onPress={handleGoToHome}>
-                <Text style={styles.skipHomeText}>Skip to Home</Text>
-                <Icon name="arrow-right" size={16} color={Colors.primary} style={{ marginLeft: 6 }} />
+              <TouchableOpacity style={styles.guestButton} onPress={handleContinueAsGuest} activeOpacity={0.8}>
+                <Icon name="smartphone" size={18} color={Colors.primaryDark} style={{ marginRight: 8 }} />
+                <Text style={styles.guestButtonText}>Continue Locally (Skip Login)</Text>
               </TouchableOpacity>
 
               <View style={styles.biometricSection}>
@@ -390,17 +396,21 @@ const styles = StyleSheet.create({
   signupText: { ...Typography.body, color: Colors.textSecondary },
   signupLink: { ...Typography.body, color: Colors.primary, fontWeight: '700' },
   signInButton: { marginTop: 16 },
-  skipHomeButton: {
+  guestButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 14,
-    paddingVertical: 8,
+    marginTop: 12,
+    paddingVertical: 12,
+    backgroundColor: Colors.primarySoft,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.primaryLight,
   },
-  skipHomeText: {
+  guestButtonText: {
     ...Typography.body,
-    color: Colors.primary,
-    fontWeight: '600',
+    color: Colors.primaryDark,
+    fontWeight: '700',
   },
   leafImage: {
     width: 90,

@@ -10,3 +10,6 @@ selftrack.db
 .expo/
 dist/
 web-build/
+
+*.apk
+selftrack.apk

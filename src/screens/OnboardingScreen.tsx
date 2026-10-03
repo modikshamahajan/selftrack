@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { useAuthStore } from '../store/useAuthStore';
 
 // ─── Responsive helpers ───────────────────────────────────────────────────────
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -98,7 +99,10 @@ const OnboardingScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handleSkip = () => navigation.replace('Login');
+  const handleSkip = async () => {
+    await useAuthStore.getState().continueAsGuest();
+    navigation.replace('MainTabs');
+  };
 
   // ── Dots ──────────────────────────────────────────────────────────────────
   const renderDots = () => (

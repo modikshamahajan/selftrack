@@ -64,6 +64,16 @@ const SignupScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) 
     }
   };
 
+  const handleContinueAsGuest = async () => {
+    setIsLoading(true);
+    try {
+      await useAuthStore.getState().continueAsGuest();
+      navigation.replace('MainTabs');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
@@ -117,8 +127,13 @@ const SignupScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) 
             </View>
           </View>
 
-          <Button title="Continue" onPress={handleSignup} loading={isLoading} variant="gradient" style={{ marginTop: 8, marginBottom: 16 }}
+          <Button title="Continue" onPress={handleSignup} loading={isLoading} variant="gradient" style={{ marginTop: 8, marginBottom: 12 }}
             icon={<Icon name="arrow-right" size={20} color={Colors.textWhite} />} iconPosition="right" />
+
+          <TouchableOpacity style={styles.guestButton} onPress={handleContinueAsGuest} activeOpacity={0.8}>
+            <Icon name="smartphone" size={18} color={Colors.primaryDark} style={{ marginRight: 8 }} />
+            <Text style={styles.guestButtonText}>Continue Locally (Skip Sign Up)</Text>
+          </TouchableOpacity>
 
           <View style={styles.loginRow}>
             <Text style={styles.loginText}>Already have an account? </Text>
@@ -158,6 +173,22 @@ const styles = StyleSheet.create({
   loginRow: { flexDirection: 'row', justifyContent: 'center' },
   loginText: { ...Typography.body, color: Colors.textSecondary },
   loginLink: { ...Typography.body, color: Colors.primary, fontWeight: '700' },
+  guestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    paddingVertical: 12,
+    backgroundColor: Colors.primarySoft,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.primaryLight,
+  },
+  guestButtonText: {
+    ...Typography.body,
+    color: Colors.primaryDark,
+    fontWeight: '700',
+  },
 });
 
 export default SignupScreen;

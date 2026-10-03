@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import { useAuthStore } from './useAuthStore';
 
@@ -23,16 +24,55 @@ interface JournalState {
   deleteEntry: (id: string) => Promise<void>;
 }
 
-export const useJournalStore = create<JournalState>((set) => ({
-  entries: [],
+const STORAGE_KEY = 'selftrack_journals';
+
+const DEFAULT_JOURNALS: JournalItem[] = [
+  {
+    id: 'journal_1',
+    date: new Date().toISOString().split('T')[0],
+    title: 'Starting SelfTrack Journey! 🚀',
+    content: 'Excited to begin tracking my daily habits, fitness, and thoughts in SelfTrack. Taking it one day at a time.',
+    mood: 'great',
+    mood_score: 5,
+    images: [],
+    has_voice: false,
+    created_at: new Date().toISOString(),
+  },
+];
+
+const saveToStorage = async (entries: JournalItem[]) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  } catch (e) {}
+};
+
+export const useJournalStore = create<JournalState>((set, get) => ({
+  entries: DEFAULT_JOURNALS,
   isLoading: false,
 
   fetchEntries: async (date) => {
     set({ isLoading: true });
+
+    // Load from local storage first
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        set({ entries: JSON.parse(stored) });
+      } else {
+        await saveToStorage(DEFAULT_JOURNALS);
+      }
+    } catch (e) {}
+
+    // Try API
     try {
       const url = date ? `/journals?date=${date}` : '/journals';
       const res = await api.get(url);
-      set({ entries: res.data, isLoading: false });
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        set({ entries: res.data, isLoading: false });
+        await saveToStorage(res.data);
+      } else {
+        set({ isLoading: false });
+      }
     } catch {
       set({ isLoading: false });
     }
@@ -40,33 +80,52 @@ export const useJournalStore = create<JournalState>((set) => ({
 
   addEntry: async (entry) => {
     set({ isLoading: true });
+
+    const localId = 'journal_' + Date.now();
+    const newEntry: JournalItem = {
+      id: localId,
+      date: entry.date || new Date().toISOString().split('T')[0],
+      title: entry.title || 'Journal Entry',
+      content: entry.content || '',
+      mood: entry.mood || 'good',
+      mood_score: entry.mood_score || 4,
+      images: entry.images || [],
+      has_voice: entry.has_voice || false,
+      created_at: new Date().toISOString(),
+    };
+
+    const updated = [newEntry, ...get().entries];
+    set({ entries: updated, isLoading: false });
+    await saveToStorage(updated);
+
+    // Award XP in auth store (+30 XP)
+    const authUser = useAuthStore.getState().user;
+    if (authUser) {
+      useAuthStore.getState().updateUserXp(authUser.total_xp + 30);
+    }
+
     try {
       const res = await api.post('/journals', entry);
-      const newEntry = res.data;
-      set((state) => ({
-        entries: [newEntry, ...state.entries],
-        isLoading: false,
-      }));
-      // Award XP in auth store (+30 XP)
-      const authUser = useAuthStore.getState().user;
-      if (authUser) {
-        useAuthStore.getState().updateUserXp(authUser.total_xp + 30);
+      if (res.data?.id) {
+        const synced = get().entries.map((e) => (e.id === localId ? res.data : e));
+        set({ entries: synced });
+        await saveToStorage(synced);
+        return res.data;
       }
-      return newEntry;
     } catch (err) {
-      set({ isLoading: false });
-      throw err;
+      // Offline fallback: keep local entry
     }
+
+    return newEntry;
   },
 
   deleteEntry: async (id) => {
+    const filtered = get().entries.filter((e) => e.id !== id);
+    set({ entries: filtered });
+    await saveToStorage(filtered);
+
     try {
       await api.delete(`/journals/${id}`);
-      set((state) => ({
-        entries: state.entries.filter((e) => e.id !== id),
-      }));
-    } catch (err) {
-      throw err;
-    }
+    } catch (err) {}
   },
 }));

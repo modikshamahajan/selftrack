@@ -52,7 +52,32 @@ interface SocialState {
 export const useSocialStore = create<SocialState>()(
   persist(
     (set, get) => ({
-  posts: [],
+  posts: [
+    {
+      id: 'post_1',
+      user: 'Maya Lin',
+      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
+      time: '2h ago',
+      content: 'Just completed a 7-day hydration streak! 💧 Feeling so much more energetic throughout the day.',
+      hasImage: false,
+      likes: 12,
+      comments: 3,
+      achievement: 'Hydration Hero 🏆',
+      isLiked: false,
+    },
+    {
+      id: 'post_2',
+      user: 'Alex Rivera',
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+      time: '5h ago',
+      content: 'Hit 12,000 steps today on the morning trail! Consistency is everything. 🏃‍♂️👟',
+      hasImage: false,
+      likes: 24,
+      comments: 5,
+      achievement: '10k Steps Master ⭐',
+      isLiked: true,
+    },
+  ],
   stories: [],
   isLoading: false,
 
@@ -72,14 +97,39 @@ export const useSocialStore = create<SocialState>()(
   },
 
   createPost: async (content: string, achievement?: string, imageUrl?: string) => {
-    const res = await api.post('/social/posts', {
+    const localPost: FeedPost = {
+      id: 'post_' + Date.now(),
+      user: 'You (Explorer)',
+      avatar: '',
+      time: 'Just now',
       content,
-      achievement,
+      hasImage: !!imageUrl,
       image_url: imageUrl,
-    });
-    const newPost: FeedPost = res.data;
-    set((state) => ({ posts: [newPost, ...state.posts] }));
-    return newPost;
+      likes: 0,
+      comments: 0,
+      achievement,
+      isLiked: false,
+    };
+
+    set((state) => ({ posts: [localPost, ...state.posts] }));
+
+    try {
+      const res = await api.post('/social/posts', {
+        content,
+        achievement,
+        image_url: imageUrl,
+      });
+      if (res.data?.id) {
+        set((state) => ({
+          posts: state.posts.map((p) => (p.id === localPost.id ? res.data : p)),
+        }));
+        return res.data;
+      }
+    } catch (e) {
+      // Offline fallback: local post is retained
+    }
+
+    return localPost;
   },
 
   likePost: async (postId: string) => {
