@@ -18,3 +18,5 @@ ios/build/
 
 __pycache__/
 *.pyc
+
+*.apk

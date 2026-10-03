@@ -23,6 +23,7 @@
       },
       "package": "com.selftrack.app",
       "versionCode": 1,
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.RECORD_AUDIO",

@@ -34,7 +34,24 @@ const api = axios.create({
 
 // Allow dynamic update of base URL (e.g. for physical phone testing on LAN)
 export const updateApiBaseUrl = async (customUrl?: string) => {
-  api.defaults.baseURL = DEFAULT_BASE_URL;
+  try {
+    if (customUrl) {
+      const cleanUrl = customUrl.trim().replace(/\/+$/, '');
+      await AsyncStorage.setItem('customApiBaseUrl', cleanUrl);
+      api.defaults.baseURL = cleanUrl;
+    } else {
+      const saved = await AsyncStorage.getItem('customApiBaseUrl');
+      if (saved) {
+        api.defaults.baseURL = saved;
+      } else {
+        api.defaults.baseURL = DEFAULT_BASE_URL;
+      }
+    }
+  } catch (e) {
+    if (customUrl) {
+      api.defaults.baseURL = customUrl;
+    }
+  }
 };
 
 // Initialize custom URL if previously saved
