@@ -8,6 +8,9 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "build:android": "eas build -p android --profile preview",
+    "build:ios": "eas build -p ios --profile preview",
+    "build:ios:sim": "eas build -p ios --profile preview-simulator",
     "lint": "eslint .",
     "test": "jest"
   },

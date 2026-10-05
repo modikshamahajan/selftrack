@@ -14,7 +14,11 @@
       "bundleIdentifier": "com.selftrack.app",
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
-        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone.",
+        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library for profile pictures and journal attachments.",
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to use your camera to take photos.",
+        "NSFaceIDUsageDescription": "Allow $(PRODUCT_NAME) to use Face ID for biometric authentication.",
+        "NSMotionUsageDescription": "Allow $(PRODUCT_NAME) to access motion sensors to count your steps."
       }
     },
     "android": {
