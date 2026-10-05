@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Animated, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 // import PopupModal from '../components/PopupModal';
 import { DecorLeaf } from './SplashScreen';
@@ -220,7 +221,7 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
   ).length;
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
       <Header title="Habit Tracker" onBack={() => navigation.goBack()} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Overview Card */}
@@ -368,8 +369,8 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
       </ScrollView>
 
       {/* PopupModal removed. Create/Edit now handled in CreateEditHabitScreen */}
-      <FloatingActionButton icon="plus" onPress={openAddHabitScreen} gradient />
-    </View>
+      <FloatingActionButton icon="plus" onPress={openAddHabitScreen} gradient style={{ bottom: 24 }} />
+    </SafeAreaView>
   );
 };
 

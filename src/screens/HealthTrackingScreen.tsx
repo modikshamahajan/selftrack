@@ -695,7 +695,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 const styles = StyleSheet.create({
   safeAreaContainer: { flex: 1, backgroundColor: '#F8FAFC' },
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContentContainer: { paddingBottom: Platform.OS === 'ios' ? 40 : 32 },
+  scrollContentContainer: { paddingBottom: 110 },
 
   headerContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginTop: Platform.OS === 'android' ? 16 : 8, marginBottom: 12 },
   mainTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A' },
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
   foodItemGridCal: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 2 },
   gridItemPlusButtonCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FF6B8A', justifyContent: 'center', alignItems: 'center' },
 
-  blueprintFormOutline: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 16, marginTop: 16 },
+  blueprintFormOutline: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 16, marginTop: 16, marginBottom: 20 },
   mandatoryWarningLabel: { fontSize: 11, color: '#FF4D4F', fontWeight: '600', marginBottom: 12 },
   fieldLabelText: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 6 },
   formInputFieldReal: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 12, height: 44, color: '#1E293B', fontSize: 14 },

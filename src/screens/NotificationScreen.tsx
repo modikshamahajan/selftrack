@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
@@ -89,7 +90,7 @@ const NotificationScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const displayList = notifications.length > 0 ? notifications : DEFAULT_NOTIFICATIONS;
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
       <Header
         title="Notifications"
         onBack={() => navigation.goBack()}
@@ -151,7 +152,7 @@ const NotificationScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           </TouchableOpacity>
         ))}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 

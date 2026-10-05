@@ -142,7 +142,7 @@ export const useHealthStore = create<HealthState>()(
   },
 
   addFoodLog: async (item) => {
-    const tempId = `temp-${Date.now()}`;
+    const tempId = `food-${Date.now()}`;
     const optimisticFood = {
       id: tempId,
       date: item.date || new Date().toISOString().split('T')[0],
@@ -158,25 +158,24 @@ export const useHealthStore = create<HealthState>()(
       foodLogs: [optimisticFood, ...state.foodLogs],
     }));
 
+    const authUser = useAuthStore.getState().user;
+    if (authUser) {
+      useAuthStore.getState().updateUserXp(authUser.total_xp + 10);
+    }
+
     try {
       const res = await api.post('/health/food', item);
-      set((state) => ({
-        foodLogs: state.foodLogs.map((f) => (f.id === tempId ? res.data : f)),
-      }));
-      const authUser = useAuthStore.getState().user;
-      if (authUser) {
-        useAuthStore.getState().updateUserXp(authUser.total_xp + 10);
+      if (res.data?.id) {
+        set((state) => ({
+          foodLogs: state.foodLogs.map((f) => (f.id === tempId ? res.data : f)),
+        }));
       }
     } catch (err) {
-      set((state) => ({
-        foodLogs: state.foodLogs.filter((f) => f.id !== tempId),
-      }));
-      throw err;
+      // Offline fallback: retain optimistic food item locally, do not revert
     }
   },
 
   deleteFoodLog: async (id) => {
-    const previousLogs = get().foodLogs;
     set((state) => ({
       foodLogs: state.foodLogs.filter((f) => f.id !== id),
     }));
@@ -184,8 +183,7 @@ export const useHealthStore = create<HealthState>()(
     try {
       await api.delete(`/health/food/${id}`);
     } catch (err) {
-      set({ foodLogs: previousLogs });
-      throw err;
+      // Offline fallback: retain deletion locally
     }
   },
 

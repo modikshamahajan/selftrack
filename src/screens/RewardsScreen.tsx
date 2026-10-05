@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getScreenBgColor } from '../theme/screenBgColors';
 import Header from '../components/Header';
@@ -287,7 +288,7 @@ const RewardsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   ];
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
       <Header title="Rewards" onBack={() => navigation.goBack()} />
 
       <ScrollView
@@ -503,7 +504,7 @@ const RewardsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 

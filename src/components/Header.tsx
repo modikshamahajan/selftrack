@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
@@ -15,11 +15,12 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ title, onBack, rightAction, transparent = false }) => {
   const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'android' ? Math.max(insets.top, StatusBar.currentHeight || 0) : insets.top;
   return (
     <View style={[
       styles.container,
       transparent && styles.transparent,
-      { paddingTop: Math.max(insets.top + Spacing.sm, Spacing.base) }
+      { paddingTop: Math.max(topInset + Spacing.xs, Spacing.base) }
     ]}>
       {onBack ? (
         <TouchableOpacity style={styles.backBtn} onPress={onBack}>

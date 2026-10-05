@@ -191,14 +191,15 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     const todayStr = date || new Date().toISOString().split('T')[0];
 
     let toggledHabit: HabitItem | null = null;
+    const isToday = todayStr === new Date().toISOString().split('T')[0];
     const updatedHabits = get().habits.map((h) => {
       if (h.id === id) {
-        const isCurrentlyCompleted = h.completed_days?.[todayStr] ?? h.completed;
+        const isCurrentlyCompleted = Boolean(h.completed_days?.[todayStr]);
         const nextCompleted = !isCurrentlyCompleted;
         const newCompletedDays = { ...(h.completed_days || {}), [todayStr]: nextCompleted };
         const updated: HabitItem = {
           ...h,
-          completed: nextCompleted,
+          completed: isToday ? nextCompleted : h.completed,
           current_streak: nextCompleted ? h.current_streak + 1 : Math.max(0, h.current_streak - 1),
           completed_days: newCompletedDays,
         };
@@ -214,7 +215,8 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     // Update XP in auth store
     const authUser = useAuthStore.getState().user;
     if (authUser && toggledHabit) {
-      const xpDelta = (toggledHabit as HabitItem).completed ? 20 : -20;
+      const isDateCompleted = Boolean((toggledHabit as HabitItem).completed_days?.[todayStr]);
+      const xpDelta = isDateCompleted ? 20 : -20;
       useAuthStore.getState().updateUserXp(Math.max(0, authUser.total_xp + xpDelta));
     }
 

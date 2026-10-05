@@ -58,6 +58,69 @@ const AnimatedHeart = ({ isLiked, size = 20, unlikedColor = Colors.textSecondary
   );
 };
 
+const PostAvatar: React.FC<{
+  avatar?: string;
+  colors: readonly [string, string];
+}> = ({ avatar, colors }) => {
+  const [hasError, setHasError] = useState(false);
+  const isUrl = Boolean(avatar && (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('file://')));
+
+  if (isUrl && !hasError) {
+    return (
+      <View style={[styles.postAvatarGradient, { overflow: 'hidden', backgroundColor: Colors.backgroundGray }]}>
+        <Image
+          source={{ uri: avatar }}
+          style={{ width: '100%', height: '100%' }}
+          onError={() => setHasError(true)}
+        />
+      </View>
+    );
+  }
+
+  const isEmoji = Boolean(avatar && !isUrl && avatar.length <= 4);
+
+  return (
+    <LinearGradient colors={colors} style={styles.postAvatarGradient}>
+      {isEmoji ? (
+        <Text style={{ fontSize: 18 }}>{avatar}</Text>
+      ) : (
+        <Icon name="user" size={18} color="#4A5568" />
+      )}
+    </LinearGradient>
+  );
+};
+
+const StoryAvatar: React.FC<{
+  avatar?: string;
+  emoji?: string;
+  colors: readonly [string, string];
+}> = ({ avatar, emoji = '🌟', colors }) => {
+  const [hasError, setHasError] = useState(false);
+  const isUrl = Boolean(avatar && (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('file://')));
+
+  if (isUrl && !hasError) {
+    return (
+      <LinearGradient colors={colors} style={[styles.storyAvatarGradient, { overflow: 'hidden' }]}>
+        <Image
+          source={{ uri: avatar }}
+          style={{ width: '100%', height: '100%' }}
+          onError={() => setHasError(true)}
+        />
+      </LinearGradient>
+    );
+  }
+
+  return (
+    <LinearGradient colors={colors} style={styles.storyAvatarGradient}>
+      {emoji && emoji.length <= 4 ? (
+        <Text style={styles.storyEmoji}>{emoji}</Text>
+      ) : (
+        <Icon name="user" size={20} color="#4A5568" />
+      )}
+    </LinearGradient>
+  );
+};
+
 const DEFAULT_POSTS: FeedPost[] = [];
 
 const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
@@ -235,10 +298,11 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     posts.forEach(p => {
       if (!users.has(p.user) && result.length < 7) {
         users.add(p.user);
+        const isUrl = Boolean(p.avatar && (p.avatar.startsWith('http://') || p.avatar.startsWith('https://') || p.avatar.startsWith('file://')));
         result.push({
           name: p.user.split(' ')[0],
-          emoji: p.avatar || emojis[result.length % emojis.length],
-          avatar: p.user === user?.name ? user?.avatar_url : undefined
+          emoji: !isUrl && p.avatar && p.avatar.length <= 4 ? p.avatar : emojis[result.length % emojis.length],
+          avatar: isUrl ? p.avatar : (p.user === user?.name ? user?.avatar_url : undefined)
         });
       }
     });
@@ -275,6 +339,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 110 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
       >
         <View style={styles.header}>
@@ -318,25 +383,21 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               setViewingStoryUser(group.user);
               setCurrentStoryIndex(0);
             }}>
-              <LinearGradient colors={['#ffecd2', '#fcb69f'] as const} style={[styles.storyAvatarGradient, { overflow: 'hidden' }]}>
-                {foundUser?.avatar ? (
-                  <Image source={{ uri: foundUser.avatar }} style={{ width: '100%', height: '100%' }} />
-                ) : (
-                  <Text style={styles.storyEmoji}>{foundUser?.emoji || '🌟'}</Text>
-                )}
-              </LinearGradient>
+              <StoryAvatar
+                avatar={foundUser?.avatar}
+                emoji={foundUser?.emoji}
+                colors={['#ffecd2', '#fcb69f'] as const}
+              />
               <Text style={styles.storyName}>{group.user.split(' ')[0]}</Text>
             </TouchableOpacity>
           )})}
           {uniqueUsers.filter(u => !groupedStories.some(g => g.user.startsWith(u.name))).map((u, i) => (
             <TouchableOpacity key={`unique-${i}`} style={styles.storyItem}>
-              <LinearGradient colors={gradients[i % gradients.length]} style={[styles.storyAvatarGradient, { overflow: 'hidden' }]}>
-                {u.avatar ? (
-                  <Image source={{ uri: u.avatar }} style={{ width: '100%', height: '100%' }} />
-                ) : (
-                  <Text style={styles.storyEmoji}>{u.emoji}</Text>
-                )}
-              </LinearGradient>
+              <StoryAvatar
+                avatar={u.avatar}
+                emoji={u.emoji}
+                colors={gradients[i % gradients.length]}
+              />
               <Text style={styles.storyName}>{u.name}</Text>
             </TouchableOpacity>
           ))}
@@ -365,9 +426,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               />
               <View style={styles.postHeader}>
                 <View style={styles.postUser}>
-                  <LinearGradient colors={gradients[index % gradients.length]} style={styles.postAvatarGradient}>
-                    <Text style={{ fontSize: 18 }}>{post.avatar || '👤'}</Text>
-                  </LinearGradient>
+                  <PostAvatar avatar={post.avatar} colors={gradients[index % gradients.length]} />
                   <View>
                     <Text style={styles.postUserName}>{post.user}</Text>
                     <Text style={styles.postTime}>{post.time}</Text>
@@ -417,7 +476,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
                 <TouchableOpacity style={styles.actionBtn} onPress={() => handleComment(post.id)}>
                   <Icon name="message-circle" size={20} color={Colors.textSecondary} />
-                  <Text style={styles.actionText}>{post.comments}</Text>
+                  <Text style={styles.actionText}>{post.commentsList ? post.commentsList.length : post.comments}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.actionBtn} onPress={() => handleShare(post)}>
@@ -644,13 +703,11 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           
           <View style={{ paddingHorizontal: 20, paddingTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <LinearGradient colors={['#ffecd2', '#fcb69f'] as const} style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                {viewerAvatar.avatar ? (
-                  <Image source={{ uri: viewerAvatar.avatar }} style={{ width: '100%', height: '100%' }} />
-                ) : (
-                  <Text style={{ fontSize: 16 }}>{viewerAvatar.emoji}</Text>
-                )}
-              </LinearGradient>
+              <StoryAvatar
+                avatar={viewerAvatar.avatar}
+                emoji={viewerAvatar.emoji}
+                colors={['#ffecd2', '#fcb69f'] as const}
+              />
               <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>{viewingStoryUser}</Text>
               <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>{activeUserStories[currentStoryIndex]?.time}</Text>
             </View>

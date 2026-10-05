@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
@@ -87,35 +88,39 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       setEntries(mapped);
     }
   }, [storeEntries]);
-  const getTimelineDates = (referenceDate: Date, spanDays = 7) => {
-    const startOfWeek = new Date(referenceDate);
-    const dayIndex = startOfWeek.getDay();
-    startOfWeek.setDate(referenceDate.getDate() - dayIndex);
-    return Array.from({ length: spanDays }).map((_, i) => {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + i);
+
+  const getTimelineDates = (pastDays = 60, futureDays = 30) => {
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - pastDays);
+
+    const totalDays = pastDays + futureDays + 1;
+    return Array.from({ length: totalDays }).map((_, i) => {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
       return {
-        key: date.toISOString(),
+        key: date.toISOString().split('T')[0],
         date,
         dayLabel: date.toLocaleDateString('en-US', { weekday: 'short' }),
         dateLabel: date.getDate(),
         monthLabel: date.toLocaleDateString('en-US', { month: 'short' }),
-        isToday: date.toDateString() === new Date().toDateString(),
+        isToday: date.toDateString() === today.toDateString(),
       };
     });
   };
-  const timelineDays = useMemo(() => getTimelineDates(selectedJournalDate), [selectedJournalDate]);
+  const timelineDays = useMemo(() => getTimelineDates(60, 30), []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       if (scrollViewRef.current) {
         const idx = timelineDays.findIndex(td => td.date.toDateString() === selectedJournalDate.toDateString());
         if (idx >= 0) {
-          const scrollX = idx * 92 - (SCREEN_WIDTH / 2) + 46;
+          const itemWidth = 84;
+          const scrollX = Math.max(0, idx * itemWidth - (SCREEN_WIDTH / 2) + (itemWidth / 2));
           scrollViewRef.current.scrollTo({ x: scrollX, animated: true });
         }
       }
-    }, 100);
+    }, 150);
     return () => clearTimeout(timer);
   }, [selectedJournalDate, timelineDays]);
 
@@ -177,35 +182,56 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     setSelectedImages(updated);
   };
 
+  const baseTextRef = useRef('');
+
+  useSpeechRecognitionEvent('start', () => {
+    setIsRecording(true);
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setIsRecording(false);
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    setIsRecording(false);
+    if (event.error !== 'no-speech' && event.error !== 'aborted') {
+      console.log('Speech error:', event.message || event.error);
+    }
+  });
+
+  useSpeechRecognitionEvent('result', (event) => {
+    const transcript = event.results[0]?.transcript;
+    if (transcript) {
+      const base = baseTextRef.current ? baseTextRef.current.trim() + ' ' : '';
+      setInputText(base + transcript);
+      if (event.isFinal) {
+        baseTextRef.current = base + transcript;
+      }
+    }
+  });
+
   const toggleSpeech = async () => {
     try {
-      let speechModule;
-      try {
-        speechModule = require('expo-speech-recognition');
-      } catch (err) {
-        Alert.alert('Not Supported', 'Speech recognition is not available in this environment (e.g., Expo Go).');
-        return;
-      }
-      
-      const { ExpoSpeechRecognitionModule } = speechModule;
       if (!ExpoSpeechRecognitionModule) {
         Alert.alert('Not Supported', 'Speech recognition is not available or supported on this device.');
         return;
       }
       if (!isRecording) {
+        baseTextRef.current = inputText;
         const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
         if (result.granted) {
           setIsRecording(true);
-          ExpoSpeechRecognitionModule.start({
+          await ExpoSpeechRecognitionModule.start({
             lang: 'en-US',
             interimResults: true,
+            continuous: true,
           });
         } else {
           Alert.alert('Permission Required', 'Microphone permission is required for speech dictation.');
         }
       } else {
         setIsRecording(false);
-        ExpoSpeechRecognitionModule.stop();
+        await ExpoSpeechRecognitionModule.stop();
       }
     } catch (e) {
       setIsRecording(false);

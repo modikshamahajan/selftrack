@@ -62,6 +62,11 @@ export const useSocialStore = create<SocialState>()(
       hasImage: false,
       likes: 12,
       comments: 3,
+      commentsList: [
+        { id: 'c1', user: 'Liam Chen', text: 'Incredible discipline! Keep it up 🙌', time: '1h ago' },
+        { id: 'c2', user: 'Sofia Patel', text: 'Hydration makes such a huge difference! 💧', time: '45m ago' },
+        { id: 'c3', user: 'Alex Rivera', text: 'Great achievement Maya!', time: '20m ago' },
+      ],
       achievement: 'Hydration Hero 🏆',
       isLiked: false,
     },
@@ -73,7 +78,11 @@ export const useSocialStore = create<SocialState>()(
       content: 'Hit 12,000 steps today on the morning trail! Consistency is everything. 🏃‍♂️👟',
       hasImage: false,
       likes: 24,
-      comments: 5,
+      comments: 2,
+      commentsList: [
+        { id: 'c4', user: 'Maya Lin', text: 'Awesome trail walk Alex! 🏃‍♂️', time: '3h ago' },
+        { id: 'c5', user: 'David Miller', text: 'Crushing the step goals!', time: '1h ago' },
+      ],
       achievement: '10k Steps Master ⭐',
       isLiked: true,
     },
@@ -171,7 +180,7 @@ export const useSocialStore = create<SocialState>()(
   commentPost: async (postId: string, text: string, userName: string) => {
     // Simulate comment addition
     const newComment: Comment = {
-      id: Math.random().toString(),
+      id: 'comment_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       user: userName,
       text,
       time: 'Just now'
@@ -179,10 +188,11 @@ export const useSocialStore = create<SocialState>()(
     set((state) => ({
       posts: state.posts.map((p) => {
         if (p.id === postId) {
+          const updatedList = [...(p.commentsList || []), newComment];
           return {
             ...p,
-            comments: p.comments + 1,
-            commentsList: [...(p.commentsList || []), newComment],
+            comments: updatedList.length,
+            commentsList: updatedList,
           };
         }
         return p;

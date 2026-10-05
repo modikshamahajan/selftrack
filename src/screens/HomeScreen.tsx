@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, Alert, Image, StatusBar } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp, FadeIn, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
@@ -117,6 +118,9 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     : [...unlockedBadges, ...defaultBadges].slice(0, 3);
 
 
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'android' ? Math.max(insets.top, StatusBar.currentHeight || 0) : insets.top;
+
   return (
     <View style={styles.container}>
 
@@ -125,10 +129,17 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         colors={[Colors.primarySoft, Colors.background]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 0.4 }}
-        style={styles.headerBackground}
+        style={[styles.headerBackground, { height: 250 + topInset }]}
       />
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        style={styles.scrollContainer} 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={[
+          styles.scrollContent, 
+          { paddingTop: Math.max(topInset + 12, 24), paddingBottom: 110 }
+        ]}
+      >
 
         {/* Header */}
         <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} style={styles.header}>

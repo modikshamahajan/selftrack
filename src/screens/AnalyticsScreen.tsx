@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 import { Colors } from '../theme/colors';
@@ -180,7 +181,7 @@ const AnalyticsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   }, [activeTab]);
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
       <Header title="Analytics" onBack={() => navigation.goBack()} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Tab Selector */}
@@ -236,13 +237,13 @@ const AnalyticsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: getScreenBgColor('AnalyticsScreen') },
-  content: { paddingHorizontal: 20 },
+  content: { paddingHorizontal: 20, paddingBottom: 40 },
   tabs: { flexDirection: 'row', backgroundColor: Colors.backgroundGray, borderRadius: BorderRadius.lg, padding: 4, marginBottom: 20 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: BorderRadius.md },
   tabActive: { backgroundColor: Colors.primary },
