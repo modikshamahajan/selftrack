@@ -47,6 +47,7 @@ export type RootStackParamList = {
 
 export type BottomTabParamList = {
   Home: undefined;
+  Habits: undefined;
   Journal: undefined;
   Health: undefined;
   Social: undefined;
@@ -88,6 +89,8 @@ const BottomTabs: React.FC = () => {
       }}>
       <Tab.Screen name="Home" component={HomeScreen}
         options={{ tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} /> }} />
+      <Tab.Screen name="Habits" component={HabitTrackerScreen}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon name="check-circle" focused={focused} /> }} />
       <Tab.Screen name="Journal" component={JournalScreen}
         options={{ tabBarIcon: ({ focused }) => <TabIcon name="book-open" focused={focused} /> }} />
       <Tab.Screen name="Health" component={HealthTrackingScreen}

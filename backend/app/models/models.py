@@ -196,6 +196,22 @@ class SocialPost(Base):
     comments_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    comments = relationship("SocialComment", back_populates="post", cascade="all, delete-orphan", order_by="SocialComment.created_at")
+
+
+class SocialComment(Base):
+    __tablename__ = "social_comments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    post_id = Column(String(36), ForeignKey("social_posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_name = Column(String(100), nullable=False)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    post = relationship("SocialPost", back_populates="comments")
+    user = relationship("User")
+
 
 class Notification(Base):
     __tablename__ = "notifications"

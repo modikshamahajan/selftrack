@@ -41,6 +41,7 @@ interface HealthState {
   addFoodLog: (item: { name: string; qty: number; calories: number; serving?: string; category?: string; date?: string, image_url?: string }) => Promise<void>;
   deleteFoodLog: (id: string) => Promise<void>;
   fetchTrends: () => Promise<void>;
+  updateSleep: (hours: number, quality: number, date?: string) => Promise<void>;
   addCustomFoodItem: (name: string, cal: number, category: string) => void;
 }
 
@@ -71,9 +72,22 @@ export const useHealthStore = create<HealthState>()(
 
   fetchMetricsByDate: async (date?: string) => {
     try {
+      const targetDate = date || new Date().toISOString().split('T')[0];
       const url = date ? `/health/metrics?date=${date}` : '/health/metrics';
       const res = await api.get(url);
-      set({ metrics: res.data });
+      if (res.data) {
+        set((state) => {
+          const currentWater = (state.metrics?.date === targetDate || !state.metrics?.date)
+            ? (state.metrics?.water_glasses || 0)
+            : 0;
+          return {
+            metrics: {
+              ...res.data,
+              water_glasses: Math.max(res.data.water_glasses || 0, currentWater),
+            },
+          };
+        });
+      }
     } catch {
       // Keep state
     }
@@ -110,17 +124,26 @@ export const useHealthStore = create<HealthState>()(
   },
 
   updateWater: async (delta: number, date?: string) => {
+    const targetDate = date || new Date().toISOString().split('T')[0];
     set((state) => ({
       metrics: {
         ...state.metrics,
-        water_glasses: Math.max(0, state.metrics.water_glasses + delta),
+        date: targetDate,
+        water_glasses: Math.max(0, (state.metrics?.water_glasses || 0) + delta),
       },
     }));
     try {
       const url = date ? `/health/water?delta=${delta}&date=${date}` : `/health/water?delta=${delta}`;
       const res = await api.post(url);
-      set({ metrics: res.data });
-      if (res.data.water_glasses >= res.data.water_goal) {
+      if (res.data) {
+        set((state) => ({
+          metrics: {
+            ...res.data,
+            water_glasses: Math.max(res.data.water_glasses || 0, state.metrics?.water_glasses || 0),
+          },
+        }));
+      }
+      if (res.data?.water_glasses >= (res.data?.water_goal || 8)) {
         const authUser = useAuthStore.getState().user;
         if (authUser) {
           useAuthStore.getState().updateUserXp(authUser.total_xp + 15);
@@ -135,7 +158,14 @@ export const useHealthStore = create<HealthState>()(
     try {
       const url = date ? `/health/food?date=${date}` : '/health/food';
       const res = await api.get(url);
-      set({ foodLogs: res.data });
+      if (Array.isArray(res.data)) {
+        set((state) => {
+          const unsynced = (state.foodLogs || []).filter((f) => f.id && f.id.startsWith('food-'));
+          const existingKeys = new Set(res.data.map((f: any) => `${f.name}-${f.date}`));
+          const remainingUnsynced = unsynced.filter((f) => !existingKeys.has(`${f.name}-${f.date}`));
+          return { foodLogs: [...res.data, ...remainingUnsynced] };
+        });
+      }
     } catch {
       // Keep state
     }
@@ -195,6 +225,30 @@ export const useHealthStore = create<HealthState>()(
       }
     } catch {
       // Keep state
+    }
+  },
+
+  updateSleep: async (hours: number, quality: number, date?: string) => {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    set((state) => ({
+      metrics: {
+        ...state.metrics,
+        sleep_hours: hours,
+        sleep_quality: quality,
+      },
+    }));
+
+    try {
+      const res = await api.post('/health/sync', {
+        date: targetDate,
+        sleep_hours: hours,
+        sleep_quality: quality,
+      });
+      if (res.data) {
+        set({ metrics: res.data });
+      }
+    } catch {
+      // Keep optimistic
     }
   },
 

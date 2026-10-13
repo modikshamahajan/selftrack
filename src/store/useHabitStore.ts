@@ -13,6 +13,11 @@ export interface HabitItem {
   current_streak: number;
   completed: boolean;
   completed_days?: Record<string, boolean>;
+  reminder_enabled?: boolean;
+  reminder_frequency?: 'daily' | 'interval' | 'weekly' | 'smart';
+  reminder_time?: string;
+  reminder_interval_hours?: number;
+  reminder_days?: number[];
 }
 
 interface HabitState {
@@ -20,7 +25,7 @@ interface HabitState {
   isLoading: boolean;
   error: string | null;
   fetchHabits: () => Promise<void>;
-  addHabit: (data: { name: string; icon?: string; color?: string; category?: string; streak_target?: number }) => Promise<HabitItem>;
+  addHabit: (data: Partial<HabitItem> & { name: string }) => Promise<HabitItem>;
   updateHabit: (id: string, data: Partial<HabitItem>) => Promise<HabitItem>;
   deleteHabit: (id: string) => Promise<void>;
   toggleHabit: (id: string, date?: string) => Promise<HabitItem>;

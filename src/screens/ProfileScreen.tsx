@@ -8,6 +8,11 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -17,7 +22,7 @@ import { Feather as Icon } from '@expo/vector-icons';
 
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius } from '../theme/spacing';
+import { BorderRadius, Shadow } from '../theme/spacing';
 import { getScreenBgColor } from '../theme/screenBgColors';
 import { useAuthStore } from '../store/useAuthStore';
 import { useHabitStore } from '../store/useHabitStore';
@@ -31,6 +36,11 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
+  {
+    icon: 'edit-3',
+    label: 'Edit Profile Name',
+    color: '#EC4899',
+  },
   {
     icon: 'target',
     label: 'My Habits & Goals',
@@ -85,6 +95,42 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({
   const [profileImage, setProfileImage] = useState<string | null>(
     user?.avatar_url || null
   );
+
+  const [isEditNameModalVisible, setIsEditNameModalVisible] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+
+  const handleOpenEditName = () => {
+    setEditedName(user?.name || '');
+    setIsEditNameModalVisible(true);
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = editedName.trim();
+    if (!trimmed) {
+      Alert.alert('Invalid Name', 'Profile name cannot be empty.');
+      return;
+    }
+    if (trimmed.length < 2) {
+      Alert.alert('Invalid Name', 'Name must be at least 2 characters.');
+      return;
+    }
+    if (trimmed.length > 40) {
+      Alert.alert('Invalid Name', 'Name cannot exceed 40 characters.');
+      return;
+    }
+    setIsSavingName(true);
+    try {
+      await updateProfile({ name: trimmed });
+      setIsEditNameModalVisible(false);
+      Alert.alert('Success', 'Profile name updated successfully! 🎉');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Could not update name. Please try again.');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
 
   useEffect(() => {
     fetchRewards();
@@ -246,7 +292,17 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.userName}>{user?.name || 'SelfTracker'}</Text>
+          {/* USER NAME WITH EDIT OPTION */}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={styles.userNameContainer}
+            onPress={handleOpenEditName}
+          >
+            <Text style={styles.userName}>{user?.name || 'SelfTracker'}</Text>
+            <View style={styles.editNameBadge}>
+              <Icon name="edit-2" size={13} color="#8B5CF6" />
+            </View>
+          </TouchableOpacity>
 
           <Text style={styles.userLevel}>Level {user?.level || 1}</Text>
 
@@ -312,6 +368,11 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({
                   },
                 ]}
                 onPress={() => {
+                  if (item.label === 'Edit Profile Name') {
+                    handleOpenEditName();
+                    return;
+                  }
+
                   if (item.label === 'Logout') {
                     Alert.alert(
                       'Logout',
@@ -388,6 +449,103 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({
 
         <View style={{ height: 50 }} />
       </ScrollView>
+
+      {/* EDIT PROFILE NAME MODAL */}
+      <Modal
+        visible={isEditNameModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsEditNameModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalKeyboardAvoid}
+          >
+            <View style={styles.modalCard}>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setIsEditNameModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Icon name="x" size={18} color="#64748B" />
+              </TouchableOpacity>
+
+              <View style={styles.modalIconCircle}>
+                <Icon name="user" size={24} color="#8B5CF6" />
+              </View>
+
+              <Text style={styles.modalTitle}>Edit Profile Name</Text>
+              <Text style={styles.modalSubtitle}>
+                Update how your name appears across habits, streaks & feed.
+              </Text>
+
+              <View
+                style={[
+                  styles.inputContainer,
+                  isInputFocused && styles.inputContainerFocused,
+                ]}
+              >
+                <Icon
+                  name="edit-3"
+                  size={18}
+                  color={isInputFocused ? '#8B5CF6' : '#94A3B8'}
+                  style={{ marginRight: 10 }}
+                />
+                <TextInput
+                  style={styles.inputField}
+                  value={editedName}
+                  onChangeText={setEditedName}
+                  placeholder="Enter your name"
+                  placeholderTextColor="#94A3B8"
+                  maxLength={40}
+                  autoFocus
+                  onFocus={() => setIsInputFocused(true)}
+                  onBlur={() => setIsInputFocused(false)}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSaveName}
+                />
+                {editedName.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setEditedName('')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Icon name="x-circle" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <Text style={styles.charCountText}>
+                {editedName.length} / 40 characters
+              </Text>
+
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setIsEditNameModalVisible(false)}
+                  activeOpacity={0.7}
+                  disabled={isSavingName}
+                >
+                  <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalSaveBtn}
+                  onPress={handleSaveName}
+                  activeOpacity={0.8}
+                  disabled={isSavingName}
+                >
+                  {isSavingName ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.modalSaveBtnText}>Save Changes</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -460,6 +618,24 @@ const styles = StyleSheet.create({
 
     borderWidth: 3,
     borderColor: '#FFFFFF',
+  },
+
+  userNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  editNameBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F3E8FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
   },
 
   userName: {
@@ -590,6 +766,139 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#111827',
+  },
+
+  //
+  // EDIT NAME MODAL
+  //
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.48)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+
+  modalKeyboardAvoid: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    position: 'relative',
+    ...Shadow.xl,
+  },
+
+  modalCloseBtn: {
+    position: 'absolute',
+    top: 18,
+    right: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+
+  modalIconCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#F3E8FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 50,
+  },
+
+  inputContainerFocused: {
+    borderColor: '#8B5CF6',
+    backgroundColor: '#FFFFFF',
+  },
+
+  inputField: {
+    flex: 1,
+    fontSize: 15,
+    color: '#0F172A',
+    fontWeight: '600',
+    height: '100%',
+  },
+
+  charCountText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'right',
+    marginTop: 6,
+    marginBottom: 18,
+  },
+
+  modalButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  modalCancelBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+
+  modalSaveBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#8B5CF6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadow.sm,
+  },
+
+  modalSaveBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
 

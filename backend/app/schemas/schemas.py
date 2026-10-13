@@ -273,11 +273,23 @@ class LeaderboardItem(BaseModel):
     bg: str
 
 
-# ---------------------- SOCIAL SCHEMAS ----------------------
 class SocialPostCreate(BaseModel):
     content: str
     achievement: Optional[str] = ""
     image_url: Optional[str] = ""
+
+
+class SocialCommentCreate(BaseModel):
+    text: str
+
+
+class SocialCommentResponse(BaseModel):
+    id: str
+    user: str
+    text: str
+    time: str
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SocialPostResponse(BaseModel):
@@ -292,6 +304,7 @@ class SocialPostResponse(BaseModel):
     hasImage: bool = False
     likes: int
     comments: int
+    commentsList: List[SocialCommentResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 

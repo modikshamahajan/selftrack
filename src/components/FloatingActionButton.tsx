@@ -35,7 +35,16 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
 
   if (gradient) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.container, positionStyle, style]}>
+      <TouchableOpacity 
+        onPress={onPress} 
+        activeOpacity={0.85} 
+        style={[
+          styles.container, 
+          positionStyle, 
+          { width: size, height: size, borderRadius: size / 2 },
+          style
+        ]}
+      >
         <LinearGradient
           colors={Colors.gradients.primary}
           style={[styles.fab, { width: size, height: size, borderRadius: size / 2 }]}>
@@ -48,16 +57,33 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.8}
-      style={[styles.container, styles.fab, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }, positionStyle, style]}>
+      activeOpacity={0.85}
+      style={[
+        styles.container, 
+        styles.fab, 
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: color }, 
+        positionStyle, 
+        style
+      ]}
+    >
       <Icon name={icon} size={iconSize} color={Colors.textWhite} />
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { position: 'absolute', zIndex: 100, ...Shadow.lg },
-  fab: { justifyContent: 'center', alignItems: 'center', ...Shadow.lg },
+  container: { 
+    position: 'absolute', 
+    zIndex: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadow.lg,
+  },
+  fab: { 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
 });
 
 export default FloatingActionButton;

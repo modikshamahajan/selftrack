@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { LineChart } from 'react-native-chart-kit';
 import { Pedometer } from 'expo-sensors';
 import { useHealthStore } from '../store/useHealthStore';
@@ -94,7 +95,11 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
   const [selectedCategory, setSelectedCategory] = useState('Healthy');
 
-  const { metrics, foodLogs, customCalorieDb, customCategories, addCustomFoodItem } = useHealthStore();
+  const { metrics, foodLogs, customCalorieDb, customCategories, addCustomFoodItem, trends, fetchTrends, updateSleep } = useHealthStore();
+
+  const [sleepModalVisible, setSleepModalVisible] = useState(false);
+  const [sleepHoursInput, setSleepHoursInput] = useState('7.5');
+  const [sleepQualityInput, setSleepQualityInput] = useState('80');
 
   const calorieDb = { ...INITIAL_CALORIE_DB, ...customCalorieDb };
   
@@ -102,7 +107,6 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
   if (customCategories) {
     for (const cat of Object.keys(customCategories)) {
       if (categories[cat]) {
-        // Prevent duplicates
         categories[cat] = Array.from(new Set([...categories[cat], ...customCategories[cat]]));
       } else {
         categories[cat] = customCategories[cat];
@@ -126,6 +130,10 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
   const [customCategory, setCustomCategory] = useState('');
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [dropdownVisible, setDropdownVisible] = useState(false);
+
+  useEffect(() => {
+    fetchTrends();
+  }, []);
 
   useEffect(() => {
     useHealthStore.getState().fetchMetricsByDate(selectedDate);
@@ -297,16 +305,56 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContentContainer}
       >
-        {/* HEADER SECTION */}
-        <View style={styles.headerContainer}>
-          <View>
-            <Text style={styles.mainTitle}>Health Tracker</Text>
-            <Text style={styles.mainSubtitle}>Stay healthy & active 💪</Text>
-          </View>
-          <TouchableOpacity style={styles.notificationCircle} onPress={() => navigation?.navigate?.('Notifications')}>
-            <Icon name="bell" size={20} color="#1E293B" />
-            <View style={styles.notifAlertDot} />
-          </TouchableOpacity>
+        {/* TOP SLEEK LIGHT COLOR PANEL (Pastel Emerald, Mint & Soft Sky) */}
+        <View style={styles.heroWrapper}>
+          <LinearGradient
+            colors={['#ECFDF5', '#E0F2FE', '#F0FDF4']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroBanner}
+          >
+            {/* Subtle decorative circles in soft pastel tones */}
+            <View style={styles.heroCircleOverlay1} />
+            <View style={styles.heroCircleOverlay2} />
+
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroTagBadge}>
+                <Text style={styles.heroTagText}>VITALITY & WELLNESS 🌿</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.notificationCircle}
+                onPress={() => navigation?.navigate?.('Notifications')}
+                activeOpacity={0.8}
+              >
+                <Icon name="bell" size={18} color="#0F766E" />
+                <View style={styles.notifAlertDot} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.heroTitleRow}>
+              <Text style={styles.heroTitle}>Health Tracker 🏃‍♂️</Text>
+              <Text style={styles.heroSubtitle}>
+                Monitor your daily steps, hydration & calories effortlessly.
+              </Text>
+            </View>
+
+            {/* Quick Metrics Bar inside Light Hero Panel */}
+            <View style={styles.heroMetricsBar}>
+              <View style={styles.heroMetricPill}>
+                <Text style={styles.heroMetricEmoji}>👟</Text>
+                <Text style={styles.heroMetricLabel}>{currentSteps.toLocaleString()} Steps</Text>
+              </View>
+              <View style={styles.heroMetricPill}>
+                <Text style={styles.heroMetricEmoji}>💧</Text>
+                <Text style={styles.heroMetricLabel}>{glasses}/{waterGoal} Cups</Text>
+              </View>
+              <View style={styles.heroMetricPill}>
+                <Text style={styles.heroMetricEmoji}>🔥</Text>
+                <Text style={styles.heroMetricLabel}>{totalCalories} kcal</Text>
+              </View>
+            </View>
+          </LinearGradient>
         </View>
 
         {/* WEEKLY CALENDAR STRIP SECTION */}
@@ -655,38 +703,143 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           </View>
         </View>
 
-        {/* SLEEP AND WEEKLY METRICS */}
+        {/* DYNAMIC SLEEP AND WEEKLY METRICS */}
         <View style={styles.bottomMetricsGridSplit}>
-          <View style={styles.whitePanelCardHalf}>
-            <Text style={styles.panelTitle}>🌙 Sleep Quality</Text>
-            <View style={styles.sleepVisualWrapper}>
-              <View style={styles.sleepRingOuterCircle}>
-                <Text style={styles.sleepRingPercentageText}>78%</Text>
-              </View>
-              <View style={{ marginLeft: 12, flex: 1 }}>
-                <Text style={styles.sleepTimeLabel}>Deep Sleep: <Text style={{ fontWeight: '700' }}>2.5 hrs</Text></Text>
+          {/* Dynamic Sleep Quality Card */}
+          <TouchableOpacity 
+            style={styles.whitePanelCardHalf} 
+            activeOpacity={0.85}
+            onPress={() => {
+              setSleepHoursInput((metrics?.sleep_hours || 7.5).toString());
+              setSleepQualityInput((metrics?.sleep_quality || 80).toString());
+              setSleepModalVisible(true);
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.panelTitle}>🌙 Sleep</Text>
+              <View style={[
+                styles.sleepStatusBadge, 
+                { backgroundColor: (metrics?.sleep_quality || 80) >= 80 ? '#DCFCE7' : (metrics?.sleep_quality || 80) >= 60 ? '#FEF3C7' : '#FEE2E2' }
+              ]}>
+                <Text style={[
+                  styles.sleepStatusBadgeText,
+                  { color: (metrics?.sleep_quality || 80) >= 80 ? '#16A34A' : (metrics?.sleep_quality || 80) >= 60 ? '#D97706' : '#DC2626' }
+                ]}>
+                  {(metrics?.sleep_quality || 80) >= 80 ? 'Optimal' : (metrics?.sleep_quality || 80) >= 60 ? 'Fair' : 'Tired'}
+                </Text>
               </View>
             </View>
-          </View>
 
+            <View style={styles.sleepVisualWrapper}>
+              <View style={[
+                styles.sleepRingOuterCircle,
+                { borderColor: (metrics?.sleep_quality || 80) >= 80 ? '#10B981' : (metrics?.sleep_quality || 80) >= 60 ? '#F59E0B' : '#EF4444' }
+              ]}>
+                <Text style={styles.sleepRingPercentageText}>{metrics?.sleep_quality || 80}%</Text>
+              </View>
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <Text style={styles.sleepMainHoursText}>{metrics?.sleep_hours ? `${metrics.sleep_hours} hrs` : '7.5 hrs'}</Text>
+                <Text style={styles.sleepTimeLabel}>
+                  Deep: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{((metrics?.sleep_hours || 7.5) * 0.32).toFixed(1)}h</Text>
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.tapToEditLabel}>Tap to adjust ✏️</Text>
+          </TouchableOpacity>
+
+          {/* Dynamic Weekly Steps Card */}
           <View style={styles.whitePanelCardHalf}>
-            <Text style={styles.sectionTitle}>📈 Weekly Steps</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.sectionTitle}>📈 Steps</Text>
+              <Text style={styles.weeklyStepsSumText}>
+                {trends?.datasets?.[0]?.data?.length 
+                  ? `${Math.round(trends.datasets[0].data.reduce((a, b) => a + b, 0) / 1000)}k wk`
+                  : `${Math.round((currentSteps * 7) / 1000)}k wk`}
+              </Text>
+            </View>
+
             <LineChart
               data={{
-                labels: ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
-                datasets: [{ data: [3000, 4000, 5000, 6000, 8000, 7500, metrics?.steps || 0] }],
+                labels: trends?.labels?.length ? trends.labels.map(l => l.charAt(0)) : ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
+                datasets: [{ 
+                  data: trends?.datasets?.[0]?.data?.length 
+                    ? trends.datasets[0].data 
+                    : [3200, 4100, 5600, 6200, 8100, 7500, Math.max(100, currentSteps)] 
+                }],
               }}
               width={width * 0.42}
               height={85}
-              chartConfig={chartConfig}
-              withDots={false}
+              chartConfig={{
+                ...chartConfig,
+                color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+                strokeWidth: 2.5,
+              }}
+              withDots={true}
               withInnerLines={false}
               withOuterLines={false}
               bezier
-              style={{ marginTop: 8, marginLeft: -20 }}
+              style={{ marginTop: 6, marginLeft: -18 }}
             />
+
+            <Text style={styles.weeklyStepsAvgText}>
+              Avg: {trends?.datasets?.[0]?.data?.length 
+                ? Math.round(trends.datasets[0].data.reduce((a, b) => a + b, 0) / trends.datasets[0].data.length).toLocaleString()
+                : currentSteps.toLocaleString()} / day
+            </Text>
           </View>
         </View>
+
+        {/* MODAL TO ADJUST SLEEP */}
+        <Modal visible={sleepModalVisible} transparent animationType="fade">
+          <View style={styles.modalOverlayContainer}>
+            <View style={styles.modalContentCard}>
+              <Text style={styles.modalTitleText}>Log Sleep Metrics 🌙</Text>
+              <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>
+                Record your rest for {selectedDate}
+              </Text>
+
+              <Text style={styles.fieldLabelText}>Total Sleep (Hours):</Text>
+              <TextInput
+                style={[styles.formInputFieldReal, { marginBottom: 12 }]}
+                keyboardType="numeric"
+                value={sleepHoursInput}
+                onChangeText={setSleepHoursInput}
+                placeholder="e.g. 7.5"
+              />
+
+              <Text style={styles.fieldLabelText}>Sleep Quality (0 - 100%):</Text>
+              <TextInput
+                style={[styles.formInputFieldReal, { marginBottom: 20 }]}
+                keyboardType="numeric"
+                value={sleepQualityInput}
+                onChangeText={setSleepQualityInput}
+                placeholder="e.g. 85"
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity 
+                  style={[styles.formAddButtonSubmit, { flex: 1, backgroundColor: '#E2E8F0' }]} 
+                  onPress={() => setSleepModalVisible(false)}
+                >
+                  <Text style={[styles.formAddButtonSubmitText, { color: '#475569' }]}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.formAddButtonSubmit, { flex: 1, backgroundColor: '#4F46E5' }]} 
+                  onPress={() => {
+                    const hrs = parseFloat(sleepHoursInput) || 7.5;
+                    const qual = parseInt(sleepQualityInput) || 80;
+                    updateSleep(hrs, qual, selectedDate);
+                    setSleepModalVisible(false);
+                  }}
+                >
+                  <Text style={styles.formAddButtonSubmitText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -697,11 +850,120 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   scrollContentContainer: { paddingBottom: 110 },
 
-  headerContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginTop: Platform.OS === 'android' ? 16 : 8, marginBottom: 12 },
-  mainTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A' },
-  mainSubtitle: { fontSize: 14, color: '#64748B', marginTop: 4 },
-  notificationCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
-  notifAlertDot: { position: 'absolute', top: 12, right: 13, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF4D4F' },
+  /* ---------- TOP LIGHT COLOR HERO PANEL ---------- */
+  heroWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? 10 : 6,
+    marginBottom: 16,
+  },
+  heroBanner: {
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#D1FAE5',
+    shadowColor: '#0F766E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  heroCircleOverlay1: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    top: -40,
+    right: -20,
+  },
+  heroCircleOverlay2: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(209, 250, 229, 0.5)',
+    bottom: -20,
+    left: -20,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  heroTagBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  heroTagText: {
+    color: '#065F46',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  heroTitleRow: {
+    marginBottom: 12,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  heroMetricsBar: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  heroMetricPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  heroMetricEmoji: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  heroMetricLabel: {
+    color: '#0F766E',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  notificationCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  notifAlertDot: { position: 'absolute', top: 9, right: 10, width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#FF4D4F' },
 
   calendarCardWrapper: { backgroundColor: '#FFF', marginHorizontal: 16, borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 20 },
   calendarControlHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
@@ -806,7 +1068,13 @@ const styles = StyleSheet.create({
   sleepVisualWrapper: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   sleepRingOuterCircle: { width: 50, height: 50, borderRadius: 25, borderWidth: 4, borderColor: '#FF6B8A', justifyContent: 'center', alignItems: 'center' },
   sleepRingPercentageText: { fontSize: 13, fontWeight: '800', color: '#1E293B' },
-  sleepTimeLabel: { fontSize: 12, color: '#64748B' },
+  sleepTimeLabel: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  sleepStatusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  sleepStatusBadgeText: { fontSize: 10, fontWeight: '800' },
+  sleepMainHoursText: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  tapToEditLabel: { fontSize: 11, fontWeight: '600', color: '#6366F1', marginTop: 8 },
+  weeklyStepsSumText: { fontSize: 11, fontWeight: '800', color: '#10B981' },
+  weeklyStepsAvgText: { fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 4 },
 });
 
 export default HealthTrackingScreen;

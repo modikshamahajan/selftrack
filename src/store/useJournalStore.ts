@@ -13,6 +13,7 @@ export interface JournalItem {
   images: string[];
   has_voice: boolean;
   voice_url?: string;
+  tags?: string[];
   created_at?: string;
 }
 
@@ -20,7 +21,7 @@ interface JournalState {
   entries: JournalItem[];
   isLoading: boolean;
   fetchEntries: (date?: string) => Promise<void>;
-  addEntry: (entry: { title: string; content: string; mood?: string; mood_score?: number; images?: string[]; has_voice?: boolean; date?: string }) => Promise<JournalItem>;
+  addEntry: (entry: { title: string; content: string; mood?: string; mood_score?: number; images?: string[]; has_voice?: boolean; tags?: string[]; date?: string }) => Promise<JournalItem>;
   deleteEntry: (id: string) => Promise<void>;
 }
 
@@ -91,6 +92,7 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       mood_score: entry.mood_score || 4,
       images: entry.images || [],
       has_voice: entry.has_voice || false,
+      tags: entry.tags || [],
       created_at: new Date().toISOString(),
     };
 

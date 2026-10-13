@@ -6,7 +6,13 @@ import { StatusBar } from 'expo-status-bar';
 import AppNavigator from './src/navigation/AppNavigator';
 import { triggerDailyReminderCheck } from './src/services/notifications';
 
-LogBox.ignoreLogs(['Warning:']);
+LogBox.ignoreLogs([
+  'Warning:',
+  'Expo Go no longer supports remote push notifications',
+  'Android Push Notifications',
+  '[expo-notifications]',
+  'cannot find native module ExpoSpeechRecognition',
+]);
 
 const linking: any = {
   prefixes: ['selftrack://'],
@@ -19,6 +25,7 @@ const linking: any = {
       MainTabs: {
         screens: {
           Home: 'home',
+          Habits: 'habits',
           Journal: 'journal',
           Health: 'health',
           Social: 'social',

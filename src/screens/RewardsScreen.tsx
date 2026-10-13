@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Image,
   TouchableOpacity,
   Animated,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -253,18 +254,39 @@ const RewardsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       }))
     : DEFAULT_BADGES;
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      fetchRewards(),
+      useHabitStore.getState().fetchHabits(),
+    ]);
+    setRefreshing(false);
+  };
+
   const defaultLeaderboard = LEADERBOARD.map(item => {
-    if (item.name === 'You') {
+    if (item.name === 'You' || item.name.includes('(You)')) {
       return {
         ...item,
         name: user?.name ? `${user.name} (You)` : 'You',
-        xp: `${(user?.total_xp ?? 0).toLocaleString()} XP`,
+        xp: `${(user?.total_xp ?? summary?.total_xp ?? 0).toLocaleString()} XP`,
       };
     }
     return item;
   });
 
-  const displayLeaderboard = leaderboard.length > 0 ? leaderboard : defaultLeaderboard;
+  const displayLeaderboard = (leaderboard && leaderboard.length > 0 ? leaderboard : defaultLeaderboard).map(item => {
+    const isYou = item.name === 'You' || item.name.includes('(You)') || (user?.name && item.name.startsWith(user.name));
+    if (isYou) {
+      return {
+        ...item,
+        name: user?.name ? `${user.name} (You)` : 'You',
+        xp: `${(user?.total_xp ?? summary?.total_xp ?? 0).toLocaleString()} XP`,
+      };
+    }
+    return item;
+  });
 
   const currentLevelXp = summary?.current_level_xp ?? ((user?.total_xp ?? 0) % 1000);
   const nextLevelXp = summary?.next_level_xp ?? 1000;
@@ -294,6 +316,7 @@ const RewardsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* XP CARD */}
 

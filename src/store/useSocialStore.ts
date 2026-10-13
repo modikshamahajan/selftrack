@@ -94,12 +94,35 @@ export const useSocialStore = create<SocialState>()(
     set({ isLoading: true });
     try {
       const res = await api.get('/social/feed');
-      // Merge new posts without overwriting local state (which contains likes/comments)
-      set((state) => {
-        const existingIds = new Set(state.posts.map(p => p.id));
-        const newPosts = res.data.filter((p: FeedPost) => !existingIds.has(p.id));
-        return { posts: [...newPosts, ...state.posts], isLoading: false };
-      });
+      if (Array.isArray(res.data)) {
+        set((state) => {
+          // Map backend posts and ensure comment count is strictly accurate
+          const backendPosts: FeedPost[] = res.data.map((p: any) => ({
+            id: p.id,
+            user_id: p.user_id,
+            user: p.user,
+            avatar: p.avatar,
+            time: p.time,
+            content: p.content,
+            hasImage: p.hasImage,
+            image_url: p.image_url,
+            likes: p.likes,
+            comments: Array.isArray(p.commentsList) ? p.commentsList.length : (p.comments || 0),
+            commentsList: p.commentsList || [],
+            achievement: p.achievement,
+            isLiked: p.isLiked || false,
+          }));
+
+          // Keep any purely local unsynced posts
+          const localOnly = state.posts.filter(
+            (p) => p.id.startsWith('post_') && !backendPosts.some((bp) => bp.id === p.id)
+          );
+
+          return { posts: [...localOnly, ...backendPosts], isLoading: false };
+        });
+      } else {
+        set({ isLoading: false });
+      }
     } catch {
       set({ isLoading: false });
     }
@@ -116,6 +139,7 @@ export const useSocialStore = create<SocialState>()(
       image_url: imageUrl,
       likes: 0,
       comments: 0,
+      commentsList: [],
       achievement,
       isLiked: false,
     };
@@ -130,7 +154,7 @@ export const useSocialStore = create<SocialState>()(
       });
       if (res.data?.id) {
         set((state) => ({
-          posts: state.posts.map((p) => (p.id === localPost.id ? res.data : p)),
+          posts: state.posts.map((p) => (p.id === localPost.id ? { ...res.data, comments: 0, commentsList: [] } : p)),
         }));
         return res.data;
       }
@@ -172,19 +196,20 @@ export const useSocialStore = create<SocialState>()(
     try {
       await api.delete(`/social/posts/${postId}`);
     } catch {
-      // Rollback is tricky without full state, usually we re-fetch
       get().fetchFeed();
     }
   },
 
   commentPost: async (postId: string, text: string, userName: string) => {
-    // Simulate comment addition
+    const tempCommentId = 'comment_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const newComment: Comment = {
-      id: 'comment_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      id: tempCommentId,
       user: userName,
       text,
       time: 'Just now'
     };
+
+    // Optimistic comment addition: ensure count equals updatedList.length (exactly 1 for first comment)
     set((state) => ({
       posts: state.posts.map((p) => {
         if (p.id === postId) {
@@ -198,6 +223,29 @@ export const useSocialStore = create<SocialState>()(
         return p;
       }),
     }));
+
+    try {
+      const res = await api.post(`/social/posts/${postId}/comments`, { text });
+      if (res.data?.id) {
+        set((state) => ({
+          posts: state.posts.map((p) => {
+            if (p.id === postId) {
+              const updatedList = (p.commentsList || []).map((c) =>
+                c.id === tempCommentId ? { ...c, id: res.data.id, time: res.data.time || c.time } : c
+              );
+              return {
+                ...p,
+                comments: updatedList.length,
+                commentsList: updatedList,
+              };
+            }
+            return p;
+          }),
+        }));
+      }
+    } catch {
+      // Retain optimistic comment locally
+    }
   },
   addStory: (text: string, userName: string, imageUrl?: string) => {
     const newStory: Story = {

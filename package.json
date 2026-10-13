@@ -12,7 +12,8 @@
     "build:ios": "eas build -p ios --profile preview",
     "build:ios:sim": "eas build -p ios --profile preview-simulator",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "node scripts/patch-expo-notifications.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

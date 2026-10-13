@@ -13,30 +13,49 @@ import {
   Share,
   Alert,
   Image,
+  Dimensions,
+  StatusBar,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather as Icon, Ionicons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring } from 'react-native-reanimated';
+import { Feather as Icon, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+  withSpring,
+  FadeInDown,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
-import { getScreenBgColor } from '../theme/screenBgColors';
+import { BorderRadius, Shadow } from '../theme/spacing';
 import Card from '../components/Card';
 import FloatingActionButton from '../components/FloatingActionButton';
 import Button from '../components/Button';
 import { useSocialStore, FeedPost } from '../store/useSocialStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { LinearGradient } from 'expo-linear-gradient';
 
-const AnimatedHeart = ({ isLiked, size = 20, unlikedColor = Colors.textSecondary }: { isLiked: boolean; size?: number, unlikedColor?: string }) => {
+const { width } = Dimensions.get('window');
+
+// Bouncy animated heart for reactions
+const AnimatedHeart = ({
+  isLiked,
+  size = 20,
+  unlikedColor = '#64748B',
+}: {
+  isLiked: boolean;
+  size?: number;
+  unlikedColor?: string;
+}) => {
   const scale = useSharedValue(1);
 
   useEffect(() => {
     if (isLiked) {
       scale.value = withSequence(
-        withTiming(1.3, { duration: 150 }),
-        withSpring(1, { damping: 10, stiffness: 150 })
+        withTiming(1.35, { duration: 140 }),
+        withSpring(1, { damping: 9, stiffness: 160 })
       );
     } else {
       scale.value = 1;
@@ -50,7 +69,7 @@ const AnimatedHeart = ({ isLiked, size = 20, unlikedColor = Colors.textSecondary
   return (
     <Animated.View style={animatedStyle}>
       <Ionicons
-        name={isLiked ? "heart" : "heart-outline"}
+        name={isLiked ? 'heart' : 'heart-outline'}
         size={size}
         color={isLiked ? '#EF4444' : unlikedColor}
       />
@@ -58,106 +77,192 @@ const AnimatedHeart = ({ isLiked, size = 20, unlikedColor = Colors.textSecondary
   );
 };
 
+// Radiant avatar with multi-tone gradient frame
 const PostAvatar: React.FC<{
   avatar?: string;
-  colors: readonly [string, string];
-}> = ({ avatar, colors }) => {
+  colors?: readonly [string, string];
+  size?: number;
+}> = ({ avatar, colors = ['#8B5CF6', '#EC4899'], size = 46 }) => {
   const [hasError, setHasError] = useState(false);
-  const isUrl = Boolean(avatar && (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('file://')));
-
-  if (isUrl && !hasError) {
-    return (
-      <View style={[styles.postAvatarGradient, { overflow: 'hidden', backgroundColor: Colors.backgroundGray }]}>
-        <Image
-          source={{ uri: avatar }}
-          style={{ width: '100%', height: '100%' }}
-          onError={() => setHasError(true)}
-        />
-      </View>
-    );
-  }
-
-  const isEmoji = Boolean(avatar && !isUrl && avatar.length <= 4);
+  const isUrl = Boolean(
+    avatar &&
+      (avatar.startsWith('http://') ||
+        avatar.startsWith('https://') ||
+        avatar.startsWith('file://'))
+  );
 
   return (
-    <LinearGradient colors={colors} style={styles.postAvatarGradient}>
-      {isEmoji ? (
-        <Text style={{ fontSize: 18 }}>{avatar}</Text>
-      ) : (
-        <Icon name="user" size={18} color="#4A5568" />
-      )}
-    </LinearGradient>
+    <View style={[styles.avatarOuterRing, { width: size, height: size, borderRadius: size / 2 }]}>
+      <LinearGradient
+        colors={colors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.avatarGradientBorder, { width: size, height: size, borderRadius: size / 2 }]}
+      >
+        <View
+          style={[
+            styles.avatarInnerContainer,
+            { width: size - 4, height: size - 4, borderRadius: (size - 4) / 2 },
+          ]}
+        >
+          {isUrl && !hasError ? (
+            <Image
+              source={{ uri: avatar }}
+              style={{ width: '100%', height: '100%', borderRadius: (size - 4) / 2 }}
+              onError={() => setHasError(true)}
+            />
+          ) : avatar && avatar.length <= 4 ? (
+            <Text style={{ fontSize: size * 0.42 }}>{avatar}</Text>
+          ) : (
+            <Icon name="user" size={size * 0.45} color="#6366F1" />
+          )}
+        </View>
+      </LinearGradient>
+    </View>
   );
 };
 
+// Story Avatar with Instagram/TikTok style dual glowing ring
 const StoryAvatar: React.FC<{
   avatar?: string;
   emoji?: string;
-  colors: readonly [string, string];
-}> = ({ avatar, emoji = '🌟', colors }) => {
+  hasUnread?: boolean;
+}> = ({ avatar, emoji = '🌟', hasUnread = true }) => {
   const [hasError, setHasError] = useState(false);
-  const isUrl = Boolean(avatar && (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('file://')));
+  const isUrl = Boolean(
+    avatar &&
+      (avatar.startsWith('http://') ||
+        avatar.startsWith('https://') ||
+        avatar.startsWith('file://'))
+  );
 
-  if (isUrl && !hasError) {
-    return (
-      <LinearGradient colors={colors} style={[styles.storyAvatarGradient, { overflow: 'hidden' }]}>
-        <Image
-          source={{ uri: avatar }}
-          style={{ width: '100%', height: '100%' }}
-          onError={() => setHasError(true)}
-        />
-      </LinearGradient>
-    );
-  }
+  const ringColors = hasUnread
+    ? (['#F43F5E', '#EC4899', '#8B5CF6'] as const)
+    : (['#CBD5E1', '#94A3B8'] as const);
 
   return (
-    <LinearGradient colors={colors} style={styles.storyAvatarGradient}>
-      {emoji && emoji.length <= 4 ? (
-        <Text style={styles.storyEmoji}>{emoji}</Text>
-      ) : (
-        <Icon name="user" size={20} color="#4A5568" />
-      )}
+    <LinearGradient
+      colors={ringColors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.storyRing}
+    >
+      <View style={styles.storyInnerRing}>
+        {isUrl && !hasError ? (
+          <Image
+            source={{ uri: avatar }}
+            style={styles.storyImage}
+            onError={() => setHasError(true)}
+          />
+        ) : (
+          <Text style={styles.storyEmojiText}>{emoji}</Text>
+        )}
+      </View>
     </LinearGradient>
   );
 };
 
-const DEFAULT_POSTS: FeedPost[] = [];
+// Dynamic helper for achievement styles
+const getAchievementMeta = (achievement?: string) => {
+  if (!achievement) return { colors: ['#6366F1', '#8B5CF6'] as const, icon: 'award' };
+  const a = achievement.toLowerCase();
+  if (a.includes('hydration') || a.includes('water')) {
+    return { colors: ['#0284C7', '#06B6D4'] as const, icon: 'droplet' };
+  }
+  if (a.includes('step') || a.includes('walk') || a.includes('run') || a.includes('trail')) {
+    return { colors: ['#059669', '#10B981'] as const, icon: 'activity' };
+  }
+  if (a.includes('streak') || a.includes('warrior') || a.includes('fire')) {
+    return { colors: ['#EA580C', '#F59E0B'] as const, icon: 'zap' };
+  }
+  if (a.includes('sleep') || a.includes('bed') || a.includes('night')) {
+    return { colors: ['#7C3AED', '#A855F7'] as const, icon: 'moon' };
+  }
+  if (a.includes('diet') || a.includes('food') || a.includes('meal') || a.includes('nutrition')) {
+    return { colors: ['#D97706', '#FBBF24'] as const, icon: 'coffee' };
+  }
+  if (a.includes('meditat') || a.includes('zen') || a.includes('mind')) {
+    return { colors: ['#DB2777', '#F43F5E'] as const, icon: 'heart' };
+  }
+  return { colors: ['#4F46E5', '#7C3AED'] as const, icon: 'award' };
+};
+
+// Category filters
+const CATEGORIES = [
+  { id: 'all', label: 'All Buzz', icon: 'sparkles' },
+  { id: 'milestones', label: 'Milestones 🏆', icon: 'award' },
+  { id: 'hydration', label: 'Hydration 💧', icon: 'droplet' },
+  { id: 'fitness', label: 'Fitness 🏃', icon: 'activity' },
+  { id: 'mindset', label: 'Mindset 🧘', icon: 'heart' },
+  { id: 'streaks', label: 'Streaks 🔥', icon: 'zap' },
+];
+
+const QUICK_CHEERS = [
+  '👏 Amazing consistency!',
+  '🔥 Keep crushing it!',
+  '💧 Hydration hero!',
+  '🙌 Proud of your progress!',
+  '💪 Unstoppable energy!',
+  '✨ Truly inspiring!',
+];
+
+const ACHIEVEMENT_SUGGESTIONS = [
+  '7 Day Streak 🔥',
+  '10,000 Daily Steps 🏃',
+  'Hydration Goal Hit 💧',
+  'Healthy Eating Win 🥗',
+  'Sleep Master 🌙',
+  'Morning Workout ⚡',
+  'Other',
+];
 
 const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const bgColor = getScreenBgColor('Social');
   const user = useAuthStore((s) => s.user);
-  const { posts, stories, isLoading, fetchFeed, createPost, likePost, deletePost, commentPost, addStory, likeStory } = useSocialStore();
+  const {
+    posts,
+    stories,
+    isLoading,
+    fetchFeed,
+    createPost,
+    likePost,
+    deletePost,
+    commentPost,
+    addStory,
+    likeStory,
+  } = useSocialStore();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [postContent, setPostContent] = useState('');
-  const [postAchievement, setPostAchievement] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [hasCheeredSquad, setHasCheeredSquad] = useState(false);
+  const [squadCheerCount, setSquadCheerCount] = useState(84);
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
-  // Post Options Modal state
+  // Post modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [postContent, setPostContent] = useState('');
+  const [selectedAchievement, setSelectedAchievement] = useState('');
+  const [customAchievement, setCustomAchievement] = useState('');
+  const [postImageUri, setPostImageUri] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Post options state
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
 
-  // Comment Modal state
+  // Comments modal state
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
 
-  // Achievement state
-  const ACHIEVEMENT_SUGGESTIONS = ['7 Day Streak', 'First Workout', 'Sleep Master', 'Diet Champion', 'Other'];
-  const [selectedAchievement, setSelectedAchievement] = useState<string>('');
-  const [customAchievement, setCustomAchievement] = useState('');
-
-  // Story state
+  // Story modal state
   const [storyModalVisible, setStoryModalVisible] = useState(false);
   const [storyText, setStoryText] = useState('');
   const [storyImage, setStoryImage] = useState<string | null>(null);
 
-  // Story Viewer state
+  // Story viewer state
   const [viewingStoryUser, setViewingStoryUser] = useState<string | null>(null);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
 
@@ -167,15 +272,16 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const activeUserStories = useMemo(() => {
     if (!viewingStoryUser) return [];
-    return stories.filter(s => s.user === viewingStoryUser).reverse(); // Oldest first
+    return stories.filter((s) => s.user === viewingStoryUser).reverse();
   }, [viewingStoryUser, stories]);
 
+  // Story auto-advance timer
   useEffect(() => {
     let timer: any;
     if (viewingStoryUser && activeUserStories.length > 0) {
       timer = setTimeout(() => {
         if (currentStoryIndex < activeUserStories.length - 1) {
-          setCurrentStoryIndex(prev => prev + 1);
+          setCurrentStoryIndex((prev) => prev + 1);
         } else {
           setViewingStoryUser(null);
         }
@@ -194,11 +300,13 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     if (!postContent.trim()) return;
     setIsSubmitting(true);
     try {
-      const finalAchievement = selectedAchievement === 'Other' ? customAchievement.trim() : selectedAchievement;
-      await createPost(postContent.trim(), finalAchievement || undefined);
+      const finalAchievement =
+        selectedAchievement === 'Other' ? customAchievement.trim() : selectedAchievement;
+      await createPost(postContent.trim(), finalAchievement || undefined, postImageUri || undefined);
       setPostContent('');
       setSelectedAchievement('');
       setCustomAchievement('');
+      setPostImageUri(null);
       setModalVisible(false);
     } catch {
       // Error handled
@@ -207,13 +315,28 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     }
   };
 
+  const handlePickPostImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Camera roll permissions are needed to attach photos.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0 && result.assets[0].uri) {
+      setPostImageUri(result.assets[0].uri);
+    }
+  };
+
   const handlePickStoryImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to make this work!');
+      Alert.alert('Permission Denied', 'Camera roll permissions are needed to attach photos.');
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -226,17 +349,19 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const handleCreateStory = () => {
     if (!storyText.trim() && !storyImage) return;
-    addStory(storyText.trim(), user?.name || 'Anonymous', storyImage || undefined);
+    addStory(storyText.trim(), user?.name || 'Explorer', storyImage || undefined);
     setStoryText('');
     setStoryImage(null);
     setStoryModalVisible(false);
-    Alert.alert('Story Added', 'Your story will be visible for 24 hours!');
+    Alert.alert('Story Published 🎉', 'Your win is live for the community for 24 hours!');
   };
 
   const handleShare = async (post: FeedPost) => {
     try {
       await Share.share({
-        message: `${post.user} shared an update on SelfTrack: "${post.content}" ${post.achievement ? `🏆 ${post.achievement}` : ''}`,
+        message: `${post.user} on SelfTrack: "${post.content}" ${
+          post.achievement ? `🏆 ${post.achievement}` : ''
+        }`,
       });
     } catch (error) {
       console.log('Share error:', error);
@@ -250,10 +375,8 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const submitComment = () => {
     if (activeCommentPostId && commentText.trim()) {
-      commentPost(activeCommentPostId, commentText.trim(), user?.name || 'Anonymous');
+      commentPost(activeCommentPostId, commentText.trim(), user?.name || 'Explorer');
       setCommentText('');
-      // Note: We don't close the modal automatically so they can see their comment.
-      // Or we can leave it open. Let's just keep it open so they see the list.
     }
   };
 
@@ -270,8 +393,19 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     }
   };
 
+  const handleSquadCheer = () => {
+    if (!hasCheeredSquad) {
+      setHasCheeredSquad(true);
+      setSquadCheerCount((c) => c + 1);
+      Alert.alert('High Five! ✋🎉', 'You cheered the community! +5 XP earned.');
+    }
+  };
+
+  // Filter posts based on category and search query
   const filteredPosts = useMemo(() => {
     let result = posts;
+
+    // Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -281,28 +415,74 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           (p.achievement && p.achievement.toLowerCase().includes(q))
       );
     }
+
+    // Filter by category
+    if (selectedCategory === 'milestones') {
+      result = result.filter((p) => Boolean(p.achievement));
+    } else if (selectedCategory === 'hydration') {
+      result = result.filter(
+        (p) =>
+          p.content.toLowerCase().includes('water') ||
+          p.content.toLowerCase().includes('hydrat') ||
+          p.content.includes('💧') ||
+          (p.achievement && p.achievement.toLowerCase().includes('hydrat'))
+      );
+    } else if (selectedCategory === 'fitness') {
+      result = result.filter(
+        (p) =>
+          p.content.toLowerCase().includes('step') ||
+          p.content.toLowerCase().includes('walk') ||
+          p.content.toLowerCase().includes('run') ||
+          p.content.toLowerCase().includes('workout') ||
+          p.content.toLowerCase().includes('gym') ||
+          (p.achievement && p.achievement.toLowerCase().includes('step'))
+      );
+    } else if (selectedCategory === 'mindset') {
+      result = result.filter(
+        (p) =>
+          p.content.toLowerCase().includes('meditat') ||
+          p.content.toLowerCase().includes('calm') ||
+          p.content.toLowerCase().includes('sleep') ||
+          p.content.toLowerCase().includes('mind')
+      );
+    } else if (selectedCategory === 'streaks') {
+      result = result.filter(
+        (p) =>
+          p.content.toLowerCase().includes('streak') ||
+          p.content.toLowerCase().includes('day') ||
+          (p.achievement && p.achievement.toLowerCase().includes('streak'))
+      );
+    }
+
     return result;
-  }, [posts, searchQuery]);
+  }, [posts, searchQuery, selectedCategory]);
 
   const uniqueUsers = useMemo(() => {
     const users = new Set<string>();
-    const result: {name: string, emoji: string, avatar?: string}[] = [];
+    const result: { name: string; emoji: string; avatar?: string }[] = [];
     const emojis = ['👩', '👨', '👩‍🦰', '🧑', '👱‍♀️', '👲', '🧔'];
-    
-    // Always include current user mapped correctly
+
     if (user?.name) {
       users.add(user.name);
       result.push({ name: user.name, emoji: '🌟', avatar: user.avatar_url });
     }
-    
-    posts.forEach(p => {
-      if (!users.has(p.user) && result.length < 7) {
+
+    posts.forEach((p) => {
+      if (!users.has(p.user) && result.length < 8) {
         users.add(p.user);
-        const isUrl = Boolean(p.avatar && (p.avatar.startsWith('http://') || p.avatar.startsWith('https://') || p.avatar.startsWith('file://')));
+        const isUrl = Boolean(
+          p.avatar &&
+            (p.avatar.startsWith('http://') ||
+              p.avatar.startsWith('https://') ||
+              p.avatar.startsWith('file://'))
+        );
         result.push({
           name: p.user.split(' ')[0],
-          emoji: !isUrl && p.avatar && p.avatar.length <= 4 ? p.avatar : emojis[result.length % emojis.length],
-          avatar: isUrl ? p.avatar : (p.user === user?.name ? user?.avatar_url : undefined)
+          emoji:
+            !isUrl && p.avatar && p.avatar.length <= 4
+              ? p.avatar
+              : emojis[result.length % emojis.length],
+          avatar: isUrl ? p.avatar : p.user === user?.name ? user?.avatar_url : undefined,
         });
       }
     });
@@ -311,7 +491,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const groupedStories = useMemo(() => {
     const groups: Record<string, typeof stories> = {};
-    stories.forEach(s => {
+    stories.forEach((s) => {
       if (!groups[s.user]) groups[s.user] = [];
       groups[s.user].push(s);
     });
@@ -323,226 +503,545 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const viewerAvatar = useMemo(() => {
     if (!viewingStoryUser) return { emoji: '🌟', avatar: undefined };
-    const found = uniqueUsers.find(u => viewingStoryUser.startsWith(u.name));
+    const found = uniqueUsers.find((u) => viewingStoryUser.startsWith(u.name));
     return found || { emoji: '🌟', avatar: undefined };
   }, [viewingStoryUser, uniqueUsers]);
 
-  const gradients = [
-    ['#e0c3fc', '#8ec5fc'] as const,
-    ['#ffecd2', '#fcb69f'] as const,
-    ['#cfd9df', '#e2ebf0'] as const,
-    ['#a1c4fd', '#c2e9fb'] as const,
-    ['#fdfbfb', '#ebedee'] as const,
-  ];
-
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
+    <SafeAreaView edges={['top']} style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF1F2" />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 110 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#EC4899', '#8B5CF6']}
+            tintColor="#EC4899"
+          />
+        }
       >
-        <View style={styles.header}>
-          {!isSearching ? (
-            <>
-              <Text style={styles.title}>Social Feed</Text>
-              <TouchableOpacity style={styles.searchBtn} onPress={() => setIsSearching(true)}>
-                <Icon name="search" size={22} color={Colors.textPrimary} />
-              </TouchableOpacity>
-            </>
-          ) : (
-            <View style={styles.searchContainer}>
-              <Icon name="search" size={20} color={Colors.textTertiary} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search posts..."
-                placeholderTextColor={Colors.textTertiary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoFocus
-              />
-              <TouchableOpacity style={styles.searchBtn} onPress={() => { setIsSearching(false); setSearchQuery(''); }}>
-                <Icon name="x" size={22} color={Colors.textPrimary} />
+        {/* TOP HERO HEADER WITH VIBRANT PASTEL GRADIENT */}
+        <View style={styles.heroWrapper}>
+          <LinearGradient
+            colors={['#FFF1F2', '#FDF2F8', '#F5F3FF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroBanner}
+          >
+            {/* Soft decorative background circles */}
+            <View style={styles.heroBubble1} />
+            <View style={styles.heroBubble2} />
+
+            {/* Top row with badge & action controls */}
+            <View style={styles.heroTopRow}>
+              <View style={styles.pulseBadge}>
+                <LinearGradient
+                  colors={['#EC4899', '#8B5CF6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.pulseBadgeGrad}
+                >
+                  <Icon name="zap" size={12} color="#FFF" />
+                  <Text style={styles.pulseBadgeText}>COMMUNITY PULSE</Text>
+                </LinearGradient>
+              </View>
+
+              <View style={styles.heroActionsRow}>
+                <TouchableOpacity
+                  style={styles.iconCircleBtn}
+                  onPress={() => setIsSearching(!isSearching)}
+                  activeOpacity={0.8}
+                >
+                  <Icon name={isSearching ? 'x' : 'search'} size={18} color="#4F46E5" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.iconCircleBtn}
+                  onPress={() => navigation?.navigate?.('Notifications')}
+                  activeOpacity={0.8}
+                >
+                  <Icon name="bell" size={18} color="#E11D48" />
+                  <View style={styles.notifBadgeDot} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Hero Main Title */}
+            <View style={styles.heroTitleBox}>
+              <Text style={styles.heroTitle}>SelfTrack Tribe 🚀</Text>
+              <Text style={styles.heroSubtitle}>
+                Cheer friends, celebrate consistency & stay unstoppable together.
+              </Text>
+            </View>
+
+            {/* Search Input Bar (when toggled) */}
+            {isSearching && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.searchBarWrap}>
+                <Icon name="search" size={18} color="#8B5CF6" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search wins, names, or goals..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoFocus
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <Icon name="x-circle" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </Animated.View>
+            )}
+
+            {/* COMMUNITY SQUAD CHALLENGE CARD */}
+            <View style={styles.squadCard}>
+              <LinearGradient
+                colors={['#FFFFFF', '#FAF5FF']}
+                style={styles.squadCardGradient}
+              >
+                <View style={styles.squadHeaderRow}>
+                  <View style={styles.squadTitleLeft}>
+                    <LinearGradient
+                      colors={['#FEF3C7', '#FDE68A']}
+                      style={styles.squadTrophyBubble}
+                    >
+                      <Text style={{ fontSize: 16 }}>🏆</Text>
+                    </LinearGradient>
+                    <View>
+                      <Text style={styles.squadTitle}>Weekly Squad Challenge</Text>
+                      <Text style={styles.squadSubtext}>100k Community Steps • 74% Done</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.cheerBtn, hasCheeredSquad && styles.cheerBtnActive]}
+                    onPress={handleSquadCheer}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.cheerBtnEmoji}>{hasCheeredSquad ? '❤️' : '✋'}</Text>
+                    <Text
+                      style={[styles.cheerBtnText, hasCheeredSquad && { color: '#E11D48' }]}
+                    >
+                      {hasCheeredSquad ? `${squadCheerCount}` : 'Cheer'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Progress Bar */}
+                <View style={styles.squadProgressBarBg}>
+                  <LinearGradient
+                    colors={['#EC4899', '#8B5CF6']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.squadProgressBarFill, { width: '74%' }]}
+                  />
+                </View>
+              </LinearGradient>
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* STORIES / HIGHLIGHTS CAROUSEL */}
+        <View style={styles.storiesSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.storiesBarContent}
+          >
+            {/* Create Story Button */}
+            <TouchableOpacity
+              style={styles.storyItem}
+              onPress={() => setStoryModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.createStoryRing}>
+                <LinearGradient
+                  colors={['#EEF2FF', '#E0E7FF']}
+                  style={styles.createStoryInner}
+                >
+                  <Icon name="plus" size={24} color="#4F46E5" />
+                </LinearGradient>
+                <LinearGradient
+                  colors={['#4F46E5', '#7C3AED']}
+                  style={styles.createStoryBadge}
+                >
+                  <Icon name="plus" size={10} color="#FFF" />
+                </LinearGradient>
+              </View>
+              <Text style={styles.storyLabel}>Your Win</Text>
+            </TouchableOpacity>
+
+            {/* Active User Stories */}
+            {groupedStories.map((group) => {
+              const foundUser = uniqueUsers.find((u) => group.user.startsWith(u.name));
+              return (
+                <TouchableOpacity
+                  key={group.user}
+                  style={styles.storyItem}
+                  onPress={() => {
+                    setViewingStoryUser(group.user);
+                    setCurrentStoryIndex(0);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <StoryAvatar
+                    avatar={foundUser?.avatar}
+                    emoji={foundUser?.emoji}
+                    hasUnread={true}
+                  />
+                  <Text style={styles.storyLabel} numberOfLines={1}>
+                    {group.user.split(' ')[0]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Other Community Members */}
+            {uniqueUsers
+              .filter((u) => !groupedStories.some((g) => g.user.startsWith(u.name)))
+              .map((u, i) => (
+                <TouchableOpacity
+                  key={`member-${i}`}
+                  style={styles.storyItem}
+                  onPress={() => {
+                    Alert.alert(u.name, `${u.name} is on a consistent streak! Give them a cheer.`);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <StoryAvatar avatar={u.avatar} emoji={u.emoji} hasUnread={false} />
+                  <Text style={styles.storyLabel} numberOfLines={1}>
+                    {u.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </ScrollView>
+        </View>
+
+        {/* QUICK SHARE / COMPOSE TRIGGER BAR */}
+        <View style={styles.composeTriggerWrap}>
+          <TouchableOpacity
+            style={styles.composeTriggerCard}
+            onPress={() => setModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <PostAvatar avatar={user?.avatar_url} size={42} />
+            <View style={styles.composeTriggerTextBox}>
+              <Text style={styles.composeTriggerPlaceholder}>
+                Share a win or milestone, {user?.name ? user.name.split(' ')[0] : 'friend'}...
+              </Text>
+            </View>
+            <LinearGradient
+              colors={['#EC4899', '#8B5CF6']}
+              style={styles.composeTriggerIcon}
+            >
+              <Icon name="edit-3" size={16} color="#FFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        {/* INTERACTIVE CATEGORY FILTER CHIPS */}
+        <View style={styles.categoriesWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriesContent}
+          >
+            {CATEGORIES.map((cat) => {
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
+                  onPress={() => setSelectedCategory(cat.id)}
+                  activeOpacity={0.75}
+                >
+                  {isSelected ? (
+                    <LinearGradient
+                      colors={['#4F46E5', '#7C3AED']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.categoryChipGradient}
+                    >
+                      <Text style={styles.categoryChipTextActive}>{cat.label}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <Text style={styles.categoryChipTextInactive}>{cat.label}</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* POSTS LIST */}
+        <View style={styles.postsSection}>
+          {filteredPosts.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <LinearGradient colors={['#F5F3FF', '#EDE9FE']} style={styles.emptyIconBubble}>
+                <Icon name="message-square" size={32} color="#7C3AED" />
+              </LinearGradient>
+              <Text style={styles.emptyTitle}>No Updates Here Yet</Text>
+              <Text style={styles.emptySubtitle}>
+                {searchQuery
+                  ? "We couldn't find any posts matching your search query."
+                  : 'Be the champion who shares today’s first milestone!'}
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyActionBtn}
+                onPress={() => setModalVisible(true)}
+              >
+                <Text style={styles.emptyActionBtnText}>Share First Win 🚀</Text>
               </TouchableOpacity>
             </View>
+          ) : (
+            filteredPosts.map((post, index) => {
+              const meta = getAchievementMeta(post.achievement);
+              return (
+                <Card key={post.id} style={styles.postCard}>
+                  {/* Left vibrant category accent stripe */}
+                  <LinearGradient
+                    colors={meta.colors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.postLeftAccent}
+                  />
+
+                  {/* Post Header */}
+                  <View style={styles.postHeader}>
+                    <View style={styles.postUserInfo}>
+                      <PostAvatar
+                        avatar={post.avatar}
+                        colors={meta.colors}
+                        size={44}
+                      />
+                      <View style={{ marginLeft: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.postAuthorName}>{post.user}</Text>
+                          <View style={styles.verifiedDot}>
+                            <Icon name="check" size={9} color="#FFF" />
+                          </View>
+                        </View>
+                        <Text style={styles.postTimeText}>{post.time}</Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => handleOptions(post)}
+                      style={styles.postOptionsBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Icon name="more-horizontal" size={20} color="#94A3B8" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Achievement Badge (if present) */}
+                  {!!post.achievement && (
+                    <View style={styles.achievementBadgeWrap}>
+                      <LinearGradient
+                        colors={meta.colors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.achievementBadgeGradient}
+                      >
+                        <Icon name={meta.icon as any} size={13} color="#FFF" />
+                        <Text style={styles.achievementBadgeText}>{post.achievement}</Text>
+                      </LinearGradient>
+                    </View>
+                  )}
+
+                  {/* Post Content */}
+                  <Text style={styles.postBodyText}>{post.content}</Text>
+
+                  {/* Optional Image */}
+                  {(post.hasImage || !!post.image_url) && (
+                    <View style={styles.postImageContainer}>
+                      {post.image_url ? (
+                        <Image
+                          source={{ uri: post.image_url }}
+                          style={styles.postAttachedImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <LinearGradient
+                          colors={['#EEF2FF', '#E0E7FF']}
+                          style={styles.postImageFallback}
+                        >
+                          <Icon name="image" size={36} color="#818CF8" />
+                        </LinearGradient>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Inline Comments Preview (if any) */}
+                  {post.commentsList && post.commentsList.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.inlineCommentBox}
+                      onPress={() => handleComment(post.id)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.inlineCommentHeader}>
+                        <Text style={styles.inlineCommentAuthor}>
+                          {post.commentsList[post.commentsList.length - 1].user}:
+                        </Text>
+                        <Text style={styles.inlineCommentText} numberOfLines={1}>
+                          {post.commentsList[post.commentsList.length - 1].text}
+                        </Text>
+                      </View>
+                      {post.commentsList.length > 1 && (
+                        <Text style={styles.viewMoreCommentsLink}>
+                          View all {post.commentsList.length} cheers →
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Interactive Reaction & Action Bar */}
+                  <View style={styles.postActionBar}>
+                    {/* Like Button */}
+                    <TouchableOpacity
+                      style={[
+                        styles.actionPill,
+                        post.isLiked && styles.actionPillLiked,
+                      ]}
+                      onPress={() => likePost(post.id)}
+                      activeOpacity={0.7}
+                    >
+                      <AnimatedHeart isLiked={!!post.isLiked} size={18} />
+                      <Text
+                        style={[
+                          styles.actionPillText,
+                          post.isLiked && { color: '#EF4444', fontWeight: '700' },
+                        ]}
+                      >
+                        {post.likes}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Quick Cheer / Fire reaction */}
+                    <TouchableOpacity
+                      style={styles.actionPill}
+                      onPress={() => {
+                        likePost(post.id);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 15 }}>🔥</Text>
+                      <Text style={styles.actionPillText}>Cheer</Text>
+                    </TouchableOpacity>
+
+                    {/* Comments Button */}
+                    <TouchableOpacity
+                      style={styles.actionPill}
+                      onPress={() => handleComment(post.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Icon name="message-circle" size={17} color="#64748B" />
+                      <Text style={styles.actionPillText}>
+                        {Array.isArray(post.commentsList)
+                          ? post.commentsList.length
+                          : post.comments || 0}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Native Share Button */}
+                    <TouchableOpacity
+                      style={[styles.actionPill, { marginLeft: 'auto' }]}
+                      onPress={() => handleShare(post)}
+                      activeOpacity={0.7}
+                    >
+                      <Icon name="share-2" size={16} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              );
+            })
           )}
         </View>
 
-        {/* Stories/Friends bar */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesBar}>
-          <TouchableOpacity style={styles.storyItem} onPress={() => setStoryModalVisible(true)}>
-            <View style={[styles.storyAvatar, styles.storyAdd]}>
-              <Icon name="plus" size={20} color={Colors.primary} />
-            </View>
-            <Text style={styles.storyName}>You</Text>
-          </TouchableOpacity>
-          {groupedStories.map((group) => {
-            const foundUser = uniqueUsers.find(u => group.user.startsWith(u.name));
-            return (
-            <TouchableOpacity key={group.user} style={styles.storyItem} onPress={() => {
-              setViewingStoryUser(group.user);
-              setCurrentStoryIndex(0);
-            }}>
-              <StoryAvatar
-                avatar={foundUser?.avatar}
-                emoji={foundUser?.emoji}
-                colors={['#ffecd2', '#fcb69f'] as const}
-              />
-              <Text style={styles.storyName}>{group.user.split(' ')[0]}</Text>
-            </TouchableOpacity>
-          )})}
-          {uniqueUsers.filter(u => !groupedStories.some(g => g.user.startsWith(u.name))).map((u, i) => (
-            <TouchableOpacity key={`unique-${i}`} style={styles.storyItem}>
-              <StoryAvatar
-                avatar={u.avatar}
-                emoji={u.emoji}
-                colors={gradients[i % gradients.length]}
-              />
-              <Text style={styles.storyName}>{u.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Posts */}
-        {filteredPosts.length === 0 ? (
-          <View style={{ padding: 40, alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-              <Icon name="message-square" size={32} color={Colors.textTertiary} />
-            </View>
-            <Text style={{ color: Colors.textSecondary, fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>
-              No updates yet
-            </Text>
-            <Text style={{ color: Colors.textTertiary, textAlign: 'center' }}>
-              {searchQuery ? "We couldn't find anything matching your search." : "Be the first to share your journey with the community!"}
-            </Text>
-          </View>
-        ) : (
-          filteredPosts.map((post, index) => (
-            <Card key={post.id} style={styles.postCard}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.05)'] as const}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-              />
-              <View style={styles.postHeader}>
-                <View style={styles.postUser}>
-                  <PostAvatar avatar={post.avatar} colors={gradients[index % gradients.length]} />
-                  <View>
-                    <Text style={styles.postUserName}>{post.user}</Text>
-                    <Text style={styles.postTime}>{post.time}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity onPress={() => handleOptions(post)} style={{ padding: 4 }}>
-                  <Icon name="more-horizontal" size={20} color={Colors.textTertiary} />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.postContent}>{post.content}</Text>
-
-              {!!post.achievement && (
-                <View style={styles.achievementBadge}>
-                  <LinearGradient
-                    colors={['#FFD700', '#FFA500'] as const}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.achievementGradient}
-                  >
-                    <Icon name="award" size={14} color="#FFF" />
-                    <Text style={styles.achievementText}>{post.achievement}</Text>
-                  </LinearGradient>
-                </View>
-              )}
-
-              {post.hasImage && (
-                <View style={styles.postImage}>
-                  <Icon name="image" size={40} color={Colors.textTertiary} />
-                </View>
-              )}
-
-              <View style={styles.postActions}>
-                <TouchableOpacity
-                  style={styles.actionBtn}
-                  onPress={() => likePost(post.id)}
-                  activeOpacity={0.7}
-                >
-                  <AnimatedHeart 
-                    isLiked={!!post.isLiked} 
-                    size={20} 
-                  />
-                  <Text style={[styles.actionText, post.isLiked && { color: '#EF4444', fontWeight: '600' }]}>
-                    {post.likes}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionBtn} onPress={() => handleComment(post.id)}>
-                  <Icon name="message-circle" size={20} color={Colors.textSecondary} />
-                  <Text style={styles.actionText}>{post.commentsList ? post.commentsList.length : post.comments}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionBtn} onPress={() => handleShare(post)}>
-                  <Icon name="share-2" size={20} color={Colors.textSecondary} />
-                  <Text style={styles.actionText}>Share</Text>
-                </TouchableOpacity>
-              </View>
-            </Card>
-          ))
-        )}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 110 }} />
       </ScrollView>
 
-      {/* Floating Action Button */}
-      <FloatingActionButton icon="edit" onPress={() => setModalVisible(true)} gradient />
+      {/* FLOATING ACTION BUTTON */}
+      <FloatingActionButton
+        icon="edit-3"
+        onPress={() => setModalVisible(true)}
+        gradient
+      />
 
-      {/* Create Post Modal */}
+      {/* CREATE POST MODAL */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
+          style={styles.modalBackdrop}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Share an Update</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Icon name="x" size={24} color={Colors.textSecondary} />
+          <View style={styles.modalSheet}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <PostAvatar avatar={user?.avatar_url} size={40} />
+                <View>
+                  <Text style={styles.sheetTitle}>Celebrate a Win 🚀</Text>
+                  <Text style={styles.sheetSubtitle}>Posting as {user?.name || 'Explorer'}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.sheetCloseBtn}
+              >
+                <Icon name="x" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
             <TextInput
-              style={styles.postInput}
-              placeholder="What habit or milestone are you celebrating today?"
-              placeholderTextColor={Colors.textTertiary}
+              style={styles.sheetTextInput}
+              placeholder="What healthy habit, streak, or milestone did you hit today?"
+              placeholderTextColor="#94A3B8"
               multiline
               numberOfLines={4}
               value={postContent}
               onChangeText={setPostContent}
             />
 
-            <Text style={styles.sectionLabel}>Add Achievement (Optional)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContainer}>
-              {ACHIEVEMENT_SUGGESTIONS.map((suggestion) => (
-                <TouchableOpacity
-                  key={suggestion}
-                  style={[
-                    styles.chip,
-                    selectedAchievement === suggestion && styles.chipSelected
-                  ]}
-                  onPress={() => setSelectedAchievement(selectedAchievement === suggestion ? '' : suggestion)}
-                >
-                  <Text style={[
-                    styles.chipText,
-                    selectedAchievement === suggestion && styles.chipTextSelected
-                  ]}>{suggestion}</Text>
-                </TouchableOpacity>
-              ))}
+            {/* Achievement Selection */}
+            <Text style={styles.sheetSectionTitle}>Tag a Milestone (Optional)</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
+            >
+              {ACHIEVEMENT_SUGGESTIONS.map((sug) => {
+                const isSelected = selectedAchievement === sug;
+                return (
+                  <TouchableOpacity
+                    key={sug}
+                    style={[styles.sugChip, isSelected && styles.sugChipActive]}
+                    onPress={() => setSelectedAchievement(isSelected ? '' : sug)}
+                  >
+                    <Text
+                      style={[
+                        styles.sugChipText,
+                        isSelected && { color: '#FFF', fontWeight: '700' },
+                      ]}
+                    >
+                      {sug}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
 
             {selectedAchievement === 'Other' && (
-              <View style={styles.achievementInputRow}>
-                <Icon name="award" size={18} color={Colors.warning} />
+              <View style={styles.customAchievementRow}>
+                <Icon name="award" size={18} color="#D97706" />
                 <TextInput
-                  style={styles.achievementInput}
-                  placeholder="Custom Achievement Title"
-                  placeholderTextColor={Colors.textTertiary}
+                  style={styles.customAchievementInput}
+                  placeholder="Type custom milestone title..."
+                  placeholderTextColor="#94A3B8"
                   value={customAchievement}
                   onChangeText={setCustomAchievement}
                   autoFocus
@@ -550,37 +1049,174 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               </View>
             )}
 
+            {/* Photo Attachment Preview / Button */}
+            {postImageUri ? (
+              <View style={styles.imagePreviewWrap}>
+                <Image source={{ uri: postImageUri }} style={styles.imagePreviewThumb} />
+                <TouchableOpacity
+                  style={styles.removeImageBtn}
+                  onPress={() => setPostImageUri(null)}
+                >
+                  <Icon name="x" size={14} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.attachPhotoBtn}
+                onPress={handlePickPostImage}
+                activeOpacity={0.8}
+              >
+                <Icon name="image" size={18} color="#4F46E5" />
+                <Text style={styles.attachPhotoText}>Add Photo / Progress Snap</Text>
+              </TouchableOpacity>
+            )}
+
             <Button
-              title="Post to Community"
+              title="Share With Tribe 🚀"
               onPress={handleCreatePost}
               loading={isSubmitting}
               disabled={!postContent.trim()}
               variant="gradient"
-              style={{ marginTop: 16 }}
+              style={{ marginTop: 14 }}
             />
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Options Modal */}
+      {/* COMMENTS MODAL */}
+      <Modal visible={commentModalVisible} animationType="slide" transparent>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={[styles.modalSheet, { maxHeight: '85%' }]}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.sheetTitle}>Community Cheers 💬</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setCommentModalVisible(false)}
+                style={styles.sheetCloseBtn}
+              >
+                <Icon name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Comments list */}
+            <ScrollView
+              style={{ maxHeight: 280, marginVertical: 8 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {activeCommentPostId &&
+                posts
+                  .find((p) => p.id === activeCommentPostId)
+                  ?.commentsList?.map((c) => (
+                    <View key={c.id} style={styles.commentItemBubble}>
+                      <View style={styles.commentItemTop}>
+                        <Text style={styles.commentItemAuthor}>{c.user}</Text>
+                        <Text style={styles.commentItemTime}>{c.time}</Text>
+                      </View>
+                      <Text style={styles.commentItemBody}>{c.text}</Text>
+                    </View>
+                  ))}
+
+              {(!posts.find((p) => p.id === activeCommentPostId)?.commentsList ||
+                posts.find((p) => p.id === activeCommentPostId)!.commentsList!.length === 0) && (
+                <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32, marginBottom: 8 }}>🙌</Text>
+                  <Text style={{ color: '#94A3B8', fontWeight: '500' }}>
+                    No cheers yet. Be the first to applaud!
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Quick 1-tap reaction cheer buttons */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 6 }}>
+              QUICK CHEERS
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 6, paddingBottom: 10 }}
+            >
+              {QUICK_CHEERS.map((cheer, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.quickCheerChip}
+                  onPress={() => setCommentText(cheer)}
+                >
+                  <Text style={styles.quickCheerChipText}>{cheer}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Comment Input */}
+            <View style={styles.commentInputRow}>
+              <TextInput
+                style={styles.commentTextInput}
+                placeholder="Write an encouraging cheer..."
+                placeholderTextColor="#94A3B8"
+                value={commentText}
+                onChangeText={setCommentText}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.commentSendBtn,
+                  !commentText.trim() && { opacity: 0.5 },
+                ]}
+                onPress={submitComment}
+                disabled={!commentText.trim()}
+              >
+                <LinearGradient
+                  colors={['#EC4899', '#8B5CF6']}
+                  style={styles.commentSendGrad}
+                >
+                  <Icon name="arrow-up" size={18} color="#FFF" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* OPTIONS MODAL */}
       <Modal visible={optionsModalVisible} animationType="fade" transparent>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setOptionsModalVisible(false)}>
-          <View style={styles.optionsContent}>
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setOptionsModalVisible(false)}
+        >
+          <View style={styles.optionsPopup}>
             {selectedPost?.user_id === user?.id ? (
-              <TouchableOpacity style={styles.optionBtn} onPress={handleDeletePost}>
-                <Icon name="trash-2" size={20} color="#EF4444" />
-                <Text style={[styles.optionText, { color: '#EF4444' }]}>Delete Post</Text>
+              <TouchableOpacity style={styles.optionRow} onPress={handleDeletePost}>
+                <Icon name="trash-2" size={18} color="#EF4444" />
+                <Text style={[styles.optionRowText, { color: '#EF4444' }]}>Delete Post</Text>
               </TouchableOpacity>
             ) : (
               <>
-                <TouchableOpacity style={styles.optionBtn} onPress={() => { Alert.alert('Post Hidden', 'You will see fewer posts like this.'); setOptionsModalVisible(false); }}>
-                  <Icon name="eye-off" size={20} color={Colors.textPrimary} />
-                  <Text style={styles.optionText}>Hide Post</Text>
+                <TouchableOpacity
+                  style={styles.optionRow}
+                  onPress={() => {
+                    Alert.alert('Post Hidden', 'You will see fewer posts like this.');
+                    setOptionsModalVisible(false);
+                  }}
+                >
+                  <Icon name="eye-off" size={18} color="#334155" />
+                  <Text style={styles.optionRowText}>Hide Post</Text>
                 </TouchableOpacity>
-                <View style={styles.optionDivider} />
-                <TouchableOpacity style={styles.optionBtn} onPress={() => { Alert.alert('Reported', 'Thank you for reporting this post.'); setOptionsModalVisible(false); }}>
-                  <Icon name="flag" size={20} color="#EF4444" />
-                  <Text style={[styles.optionText, { color: '#EF4444' }]}>Report Post</Text>
+                <View style={styles.optionRowDivider} />
+                <TouchableOpacity
+                  style={styles.optionRow}
+                  onPress={() => {
+                    Alert.alert('Reported', 'Thank you. We review all flagged content.');
+                    setOptionsModalVisible(false);
+                  }}
+                >
+                  <Icon name="flag" size={18} color="#EF4444" />
+                  <Text style={[styles.optionRowText, { color: '#EF4444' }]}>Report Post</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -588,89 +1224,40 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         </TouchableOpacity>
       </Modal>
 
-      {/* Comment Modal */}
-      <Modal visible={commentModalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
-          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Comments</Text>
-              <TouchableOpacity onPress={() => setCommentModalVisible(false)}>
-                <Icon name="x" size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ flexGrow: 0, maxHeight: 300, marginBottom: 16 }}>
-              {activeCommentPostId &&
-                posts
-                  .find((p) => p.id === activeCommentPostId)
-                  ?.commentsList?.map((c) => (
-                    <View key={c.id} style={{ marginBottom: 12, backgroundColor: Colors.backgroundGray, padding: 12, borderRadius: BorderRadius.lg }}>
-                      <Text style={{ ...Typography.caption, color: Colors.textSecondary, fontWeight: '600' }}>
-                        {c.user} <Text style={{ fontWeight: '400', fontSize: 10 }}>• {c.time}</Text>
-                      </Text>
-                      <Text style={{ ...Typography.body, color: Colors.textPrimary, marginTop: 4 }}>{c.text}</Text>
-                    </View>
-                  ))}
-              {(!posts.find((p) => p.id === activeCommentPostId)?.commentsList || posts.find((p) => p.id === activeCommentPostId)!.commentsList!.length === 0) && (
-                <Text style={{ color: Colors.textTertiary, textAlign: 'center', marginVertical: 20 }}>No comments yet. Be the first!</Text>
-              )}
-            </ScrollView>
-
-            <TextInput
-              style={[styles.postInput, { minHeight: 60 }]}
-              placeholder="Type your comment..."
-              placeholderTextColor={Colors.textTertiary}
-              multiline
-              numberOfLines={2}
-              value={commentText}
-              onChangeText={setCommentText}
-            />
-
-            <Button
-              title="Post Comment"
-              onPress={submitComment}
-              disabled={!commentText.trim()}
-              variant="gradient"
-              style={{ marginTop: 16 }}
-            />
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Story Creation Modal */}
+      {/* STORY CREATION MODAL */}
       <Modal visible={storyModalVisible} animationType="slide" transparent>
-        <View style={{ flex: 1, backgroundColor: '#000', paddingTop: 60 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, alignItems: 'center', zIndex: 10 }}>
+        <View style={styles.storyCreateContainer}>
+          <View style={styles.storyCreateTopBar}>
             <TouchableOpacity onPress={() => setStoryModalVisible(false)}>
-              <Icon name="x" size={28} color="#FFF" />
+              <Icon name="x" size={26} color="#FFF" />
             </TouchableOpacity>
-            <Button 
-              title="Share Story" 
-              onPress={handleCreateStory} 
-              disabled={!storyText.trim() && !storyImage} 
+            <Button
+              title="Share Win"
+              onPress={handleCreateStory}
+              disabled={!storyText.trim() && !storyImage}
               size="sm"
               variant="gradient"
-              style={{ width: 140 }}
+              style={{ width: 130 }}
             />
           </View>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+
+          <View style={styles.storyCreateCanvas}>
             {storyImage && (
               <Image source={{ uri: storyImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
             )}
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: storyImage ? 'rgba(0,0,0,0.3)' : 'transparent', justifyContent: 'center' }]}>
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: storyImage ? 'rgba(0,0,0,0.35)' : 'transparent',
+                  justifyContent: 'center',
+                },
+              ]}
+            >
               <TextInput
-                style={{
-                  fontSize: 28,
-                  color: '#FFF',
-                  textAlign: 'center',
-                  fontWeight: 'bold',
-                  width: '100%',
-                }}
-                placeholder={storyImage ? "Add text (optional)..." : "Type your story..."}
-                placeholderTextColor="rgba(255,255,255,0.5)"
+                style={styles.storyCanvasInput}
+                placeholder={storyImage ? 'Add text (optional)...' : 'Type your win or milestone...'}
+                placeholderTextColor="rgba(255,255,255,0.6)"
                 multiline
                 autoFocus
                 value={storyText}
@@ -678,82 +1265,118 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               />
             </View>
           </View>
-          
-          <View style={{ padding: 20, paddingBottom: 40, flexDirection: 'row', justifyContent: 'center' }}>
-            <TouchableOpacity 
-              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', padding: 12, borderRadius: 30 }}
+
+          <View style={styles.storyCreateBottomBar}>
+            <TouchableOpacity
+              style={styles.storyAttachPhotoBtn}
               onPress={handlePickStoryImage}
             >
               <Icon name="image" size={20} color="#FFF" style={{ marginRight: 8 }} />
-              <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{storyImage ? 'Change Image' : 'Add Image'}</Text>
+              <Text style={{ color: '#FFF', fontWeight: '700' }}>
+                {storyImage ? 'Change Photo' : 'Attach Photo'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Story Viewer Modal */}
+      {/* STORY VIEWER MODAL */}
       <Modal visible={!!viewingStoryUser} animationType="fade" transparent>
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
-          {/* Progress bars */}
-          <View style={{ flexDirection: 'row', paddingTop: 60, paddingHorizontal: 10, gap: 4, zIndex: 10 }}>
+        <View style={styles.storyViewerContainer}>
+          {/* Progress Indicators */}
+          <View style={styles.storyProgressRow}>
             {activeUserStories.map((s, i) => (
-              <View key={s.id} style={{ flex: 1, height: 2, borderRadius: 1, backgroundColor: i <= currentStoryIndex ? '#FFF' : 'rgba(255,255,255,0.3)' }} />
+              <View
+                key={s.id}
+                style={[
+                  styles.storyProgressBar,
+                  {
+                    backgroundColor:
+                      i <= currentStoryIndex ? '#FFF' : 'rgba(255,255,255,0.35)',
+                  },
+                ]}
+              />
             ))}
           </View>
-          
-          <View style={{ paddingHorizontal: 20, paddingTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
+
+          {/* Viewer Header */}
+          <View style={styles.storyViewerHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <StoryAvatar
-                avatar={viewerAvatar.avatar}
-                emoji={viewerAvatar.emoji}
-                colors={['#ffecd2', '#fcb69f'] as const}
-              />
-              <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>{viewingStoryUser}</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>{activeUserStories[currentStoryIndex]?.time}</Text>
+              <PostAvatar avatar={viewerAvatar.avatar} size={38} />
+              <View>
+                <Text style={styles.storyViewerName}>{viewingStoryUser}</Text>
+                <Text style={styles.storyViewerTime}>
+                  {activeUserStories[currentStoryIndex]?.time}
+                </Text>
+              </View>
             </View>
             <TouchableOpacity onPress={() => setViewingStoryUser(null)}>
-              <Icon name="x" size={28} color="#FFF" />
+              <Icon name="x" size={26} color="#FFF" />
             </TouchableOpacity>
           </View>
-          
-          <View style={{ flex: 1, marginTop: -100 }}>
+
+          {/* Story View Content */}
+          <View style={styles.storyViewerBody}>
             {activeUserStories[currentStoryIndex]?.image_url && (
-               <Image source={{ uri: activeUserStories[currentStoryIndex].image_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+              <Image
+                source={{ uri: activeUserStories[currentStoryIndex].image_url }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="cover"
+              />
             )}
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: activeUserStories[currentStoryIndex]?.image_url ? 'rgba(0,0,0,0.3)' : 'transparent', padding: 20 }}>
-              <Text style={{ color: '#FFF', fontSize: 28, textAlign: 'center', fontWeight: 'bold' }}>
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: activeUserStories[currentStoryIndex]?.image_url
+                    ? 'rgba(0,0,0,0.35)'
+                    : 'transparent',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  padding: 24,
+                },
+              ]}
+            >
+              <Text style={styles.storyViewerText}>
                 {activeUserStories[currentStoryIndex]?.text}
               </Text>
             </View>
-            
-            {/* Tap areas for navigation */}
-            <TouchableOpacity 
-              style={{ position: 'absolute', top: 100, bottom: 0, left: 0, width: '30%' }} 
+
+            {/* Tap zones for backward/forward navigation */}
+            <TouchableOpacity
+              style={styles.storyTapLeft}
               onPress={() => {
                 if (currentStoryIndex > 0) setCurrentStoryIndex(currentStoryIndex - 1);
-              }} 
+              }}
             />
-            <TouchableOpacity 
-              style={{ position: 'absolute', top: 100, bottom: 0, right: 0, width: '70%' }} 
+            <TouchableOpacity
+              style={styles.storyTapRight}
               onPress={() => {
-                if (currentStoryIndex < activeUserStories.length - 1) setCurrentStoryIndex(currentStoryIndex + 1);
-                else setViewingStoryUser(null);
-              }} 
+                if (currentStoryIndex < activeUserStories.length - 1) {
+                  setCurrentStoryIndex(currentStoryIndex + 1);
+                } else {
+                  setViewingStoryUser(null);
+                }
+              }}
             />
 
-            {/* Story Actions */}
+            {/* Story Heart Action */}
             {activeUserStories[currentStoryIndex] && (
-              <View style={{ position: 'absolute', bottom: 40, right: 20, zIndex: 20 }}>
-                <TouchableOpacity 
-                  style={{ backgroundColor: 'rgba(0,0,0,0.5)', padding: 12, borderRadius: 24, flexDirection: 'row', alignItems: 'center' }}
+              <View style={styles.storyViewerActions}>
+                <TouchableOpacity
+                  style={styles.storyLikeBubble}
                   onPress={() => likeStory(activeUserStories[currentStoryIndex].id)}
                 >
-                  <AnimatedHeart 
-                    isLiked={!!activeUserStories[currentStoryIndex].isLiked} 
-                    size={24} 
+                  <AnimatedHeart
+                    isLiked={!!activeUserStories[currentStoryIndex].isLiked}
+                    size={24}
                     unlikedColor="#FFF"
                   />
-                  {activeUserStories[currentStoryIndex].isLiked && <Text style={{ color: '#EF4444', fontWeight: 'bold', marginLeft: 8 }}>Liked</Text>}
+                  {activeUserStories[currentStoryIndex].isLiked && (
+                    <Text style={{ color: '#EF4444', fontWeight: 'bold', marginLeft: 8 }}>
+                      Liked
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             )}
@@ -765,239 +1388,921 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+
+  // HERO SECTION
+  heroWrapper: {
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    backgroundColor: '#FFF',
+    ...Shadow.sm,
+  },
+  heroBanner: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 22,
+    position: 'relative',
+  },
+  heroBubble1: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(236, 72, 153, 0.08)',
+    top: -40,
+    right: -20,
+  },
+  heroBubble2: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    bottom: 20,
+    left: -30,
+  },
+  heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 16,
-    minHeight: 60,
+    marginBottom: 12,
   },
-  title: { ...Typography.heading2, color: Colors.textPrimary },
-  searchBtn: { padding: 8 },
-  searchContainer: {
-    flex: 1,
+  pulseBadge: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  pulseBadgeGrad: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundGray,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: 12,
-    height: 40,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  pulseBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  heroActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconCircleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    ...Shadow.sm,
+  },
+  notifBadgeDot: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+  },
+  heroTitleBox: {
+    marginBottom: 14,
+  },
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+
+  // Search input
+  searchBarWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 44,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadow.sm,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: Colors.textPrimary,
+    fontSize: 14,
+    color: '#1E293B',
+    fontWeight: '500',
   },
-  storiesBar: { paddingHorizontal: 20, paddingBottom: 16, gap: 16 },
-  storyItem: { alignItems: 'center' },
-  storyAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.backgroundGray,
+
+  // Squad Challenge Card
+  squadCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadow.sm,
+  },
+  squadCardGradient: {
+    padding: 14,
+  },
+  squadHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  squadTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  squadTrophyBubble: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  squadTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  squadSubtext: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  cheerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  cheerBtnActive: {
+    backgroundColor: '#FFE4E6',
+  },
+  cheerBtnEmoji: {
+    fontSize: 14,
+  },
+  cheerBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  squadProgressBarBg: {
+    height: 6,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  squadProgressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+
+  // STORIES SECTION
+  storiesSection: {
+    paddingVertical: 14,
+    backgroundColor: '#F8FAFC',
+  },
+  storiesBarContent: {
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  storyItem: {
+    alignItems: 'center',
+    width: 64,
+  },
+  createStoryRing: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF',
+    borderWidth: 2,
+    borderColor: '#C7D2FE',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: 6,
+  },
+  createStoryInner: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  createStoryBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.primary,
-    marginBottom: 4,
+    borderColor: '#FFF',
   },
-  storyAvatarGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
+  storyRing: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    padding: 2.5,
+    marginBottom: 6,
     ...Shadow.sm,
   },
-  storyAdd: { borderStyle: 'dashed', borderColor: Colors.primary },
-  storyEmoji: { fontSize: 24 },
-  storyName: { ...Typography.caption, color: Colors.textSecondary },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
+  storyInnerRing: {
+    flex: 1,
+    borderRadius: 28,
+    backgroundColor: '#FFF',
+    padding: 2,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  emptyText: {
-    ...Typography.body,
-    color: Colors.textTertiary,
+  storyImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 26,
+  },
+  storyEmojiText: {
+    fontSize: 24,
+  },
+  storyLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
     textAlign: 'center',
   },
-  postCard: {
-    marginHorizontal: 20,
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.card,
+
+  // COMPOSE TRIGGER BAR
+  composeTriggerWrap: {
+    paddingHorizontal: 20,
+    marginBottom: 14,
+  },
+  composeTriggerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 22,
+    padding: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadow.sm,
+  },
+  composeTriggerTextBox: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  composeTriggerPlaceholder: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  composeTriggerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // CATEGORY FILTER CHIPS
+  categoriesWrap: {
+    marginBottom: 12,
+  },
+  categoriesContent: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  categoryChip: {
+    borderRadius: 20,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     overflow: 'hidden',
-    ...Shadow.md,
+  },
+  categoryChipSelected: {
+    borderColor: 'transparent',
+  },
+  categoryChipGradient: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  categoryChipTextActive: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  categoryChipTextInactive: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+
+  // POSTS SECTION
+  postsSection: {
+    paddingHorizontal: 20,
+  },
+  emptyCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 10,
+    ...Shadow.sm,
+  },
+  emptyIconBubble: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 18,
+  },
+  emptyActionBtn: {
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  emptyActionBtnText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  // POST CARD
+  postCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    position: 'relative',
+    overflow: 'hidden',
+    ...Shadow.sm,
+  },
+  postLeftAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 14,
+    bottom: 14,
+    width: 4.5,
+    borderRadius: 3,
   },
   postHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+    paddingLeft: 4,
   },
-  postUser: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  postAvatarGradient: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  postUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  postAuthorName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  verifiedDot: {
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    backgroundColor: '#3B82F6',
     justifyContent: 'center',
     alignItems: 'center',
-    ...Shadow.sm,
   },
-  postUserName: { ...Typography.body, fontWeight: '700', color: Colors.textPrimary },
-  postTime: { ...Typography.caption, color: Colors.textTertiary, marginTop: 2 },
-  postContent: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    lineHeight: 22,
-    marginBottom: 12,
+  postTimeText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
+    marginTop: 1,
   },
-  achievementBadge: {
+  postOptionsBtn: {
+    padding: 6,
+  },
+
+  // Avatar Component styles
+  avatarOuterRing: {
+    padding: 1.5,
+  },
+  avatarGradientBorder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 2,
+  },
+  avatarInnerContainer: {
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Achievement Badge
+  achievementBadgeWrap: {
     alignSelf: 'flex-start',
-    marginBottom: 12,
-    borderRadius: BorderRadius.full,
+    borderRadius: 20,
     overflow: 'hidden',
+    marginBottom: 10,
+    marginLeft: 4,
   },
-  achievementGradient: {
+  achievementBadgeGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
+    paddingVertical: 5,
   },
-  achievementText: { ...Typography.caption, fontWeight: '700', color: '#FFF' },
-  postImage: {
-    height: 160,
-    backgroundColor: Colors.backgroundGray,
-    borderRadius: BorderRadius.lg,
+  achievementBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 0.3,
+  },
+
+  // Post Body
+  postBodyText: {
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: '#334155',
+    fontWeight: '500',
+    marginBottom: 12,
+    paddingLeft: 4,
+  },
+
+  // Post Attached Image
+  postImageContainer: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    height: 190,
+    marginBottom: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  postAttachedImage: {
+    width: '100%',
+    height: '100%',
+  },
+  postImageFallback: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  postActions: {
-    flexDirection: 'row',
-    gap: 24,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
-  },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  actionText: { ...Typography.caption, color: Colors.textSecondary, fontSize: 14 },
 
-  // Modal styles
-  modalOverlay: {
+  // Inline comment box
+  inlineCommentBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  inlineCommentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inlineCommentAuthor: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  inlineCommentText: {
+    fontSize: 12,
+    color: '#64748B',
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  viewMoreCommentsLink: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6366F1',
+    marginTop: 4,
+  },
+
+  // Action bar
+  postActionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  actionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  actionPillLiked: {
+    backgroundColor: '#FEE2E2',
+  },
+  actionPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+
+  // MODALS
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: Colors.card,
-    borderTopLeftRadius: BorderRadius.xxl,
-    borderTopRightRadius: BorderRadius.xxl,
-    padding: 24,
-    paddingBottom: 40,
+  modalSheet: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: 36,
+    ...Shadow.lg,
   },
-  modalHeader: {
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  modalHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  modalTitle: { ...Typography.heading3, color: Colors.textPrimary },
-  postInput: {
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  sheetSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sheetTextInput: {
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    borderRadius: BorderRadius.lg,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
     padding: 14,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: '#1E293B',
     textAlignVertical: 'top',
-    minHeight: 100,
-    backgroundColor: Colors.backgroundGray,
+    minHeight: 90,
+    marginBottom: 12,
   },
-  achievementInputRow: {
+  sheetSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sugChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sugChipActive: {
+    backgroundColor: '#4F46E5',
+    borderColor: '#4F46E5',
+  },
+  sugChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  customAchievementRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
+    gap: 8,
+    backgroundColor: '#FFFBEB',
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    borderRadius: BorderRadius.lg,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.backgroundGray,
+    paddingVertical: 6,
+    marginBottom: 12,
   },
-  achievementInput: {
+  customAchievementInput: {
     flex: 1,
-    fontSize: 14,
-    color: Colors.textPrimary,
+    fontSize: 13,
+    color: '#1E293B',
   },
-  optionsContent: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: 8,
-    margin: 20,
+  attachPhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EEF2FF',
+    padding: 12,
+    borderRadius: 14,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    borderStyle: 'dashed',
+    marginBottom: 6,
+  },
+  attachPhotoText: {
+    color: '#4F46E5',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  imagePreviewWrap: {
+    height: 100,
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 8,
+  },
+  imagePreviewThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  removeImageBtn: {
     position: 'absolute',
-    bottom: 40,
-    left: 20,
-    right: 20,
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // COMMENTS LIST IN MODAL
+  commentItemBubble: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  commentItemTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 3,
+  },
+  commentItemAuthor: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  commentItemTime: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  commentItemBody: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 18,
+  },
+  quickCheerChip: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  quickCheerChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  commentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  commentTextInput: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    height: 42,
+    fontSize: 14,
+    color: '#1E293B',
+  },
+  commentSendBtn: {
+    borderRadius: 21,
+    overflow: 'hidden',
+  },
+  commentSendGrad: {
+    width: 42,
+    height: 42,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // OPTIONS POPUP
+  optionsPopup: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 8,
+    marginHorizontal: 20,
+    marginBottom: 40,
     ...Shadow.lg,
   },
-  optionBtn: {
+  optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 16,
+    padding: 14,
   },
-  optionText: {
-    ...Typography.body,
-    fontWeight: '500',
-    color: Colors.textPrimary,
+  optionRowText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
   },
-  optionDivider: {
+  optionRowDivider: {
     height: 1,
-    backgroundColor: Colors.borderLight,
+    backgroundColor: '#F1F5F9',
     marginHorizontal: 8,
   },
-  sectionLabel: {
-    ...Typography.body,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginTop: 16,
-    marginBottom: 8,
+
+  // STORY MODAL STYLES
+  storyCreateContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    paddingTop: 50,
   },
-  chipsContainer: {
-    gap: 8,
-    paddingBottom: 8,
+  storyCreateTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    zIndex: 10,
   },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.backgroundGray,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
+  storyCreateCanvas: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
-  chipSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  chipText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  chipTextSelected: {
+  storyCanvasInput: {
+    fontSize: 26,
     color: '#FFF',
-    fontWeight: '700',
-  }
+    textAlign: 'center',
+    fontWeight: '800',
+    width: '100%',
+  },
+  storyCreateBottomBar: {
+    padding: 20,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  storyAttachPhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+
+  // STORY VIEWER
+  storyViewerContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  storyProgressRow: {
+    flexDirection: 'row',
+    paddingTop: 54,
+    paddingHorizontal: 10,
+    gap: 4,
+    zIndex: 10,
+  },
+  storyProgressBar: {
+    flex: 1,
+    height: 2.5,
+    borderRadius: 1.5,
+  },
+  storyViewerHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  storyViewerName: {
+    color: '#FFF',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  storyViewerTime: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 11,
+  },
+  storyViewerBody: {
+    flex: 1,
+    marginTop: -80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storyViewerText: {
+    color: '#FFF',
+    fontSize: 26,
+    textAlign: 'center',
+    fontWeight: '800',
+    lineHeight: 34,
+  },
+  storyTapLeft: {
+    position: 'absolute',
+    top: 100,
+    bottom: 0,
+    left: 0,
+    width: '30%',
+  },
+  storyTapRight: {
+    position: 'absolute',
+    top: 100,
+    bottom: 0,
+    right: 0,
+    width: '70%',
+  },
+  storyViewerActions: {
+    position: 'absolute',
+    bottom: 40,
+    right: 20,
+    zIndex: 20,
+  },
+  storyLikeBubble: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
 });
 
 export default SocialFeedScreen;

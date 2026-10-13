@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Animated, Dimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 // import PopupModal from '../components/PopupModal';
 import { DecorLeaf } from './SplashScreen';
 import { Colors } from '../theme/colors';
@@ -220,21 +221,73 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
     habit => habit.completedDays?.[selectedDateKey]
   ).length;
 
+  const canGoBack = navigation.canGoBack();
+  const isTab = route?.name === 'Habits';
+
   return (
-    <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
-      <Header title="Habit Tracker" onBack={() => navigation.goBack()} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Overview Card */}
-        <Card style={styles.overviewCard}>
-          <View style={styles.overviewRow}>
-            <ProgressRing progress={habits.length === 0 ? 0 : (completedCount / habits.length) * 100} size={80} color={Colors.primary} strokeWidth={8} />
-            <View style={styles.overviewText}>
-              <Text style={styles.overviewTitle}>{completedCount}/{habits.length} Completed</Text>
-              <Text style={styles.overviewSubtitle}>Keep going! Almost there 🎯</Text>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
+      {/* TOP LIGHT COLOR HERO PANEL (Warm Sunrise & Amber) */}
+      <View style={styles.heroWrapper}>
+        <LinearGradient
+          colors={['#FFF7ED', '#FEF3C7', '#FFEDD5']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroBanner}
+        >
+          {/* Subtle decorative circles in soft golden tones */}
+          <View style={styles.heroCircleOverlay1} />
+          <View style={styles.heroCircleOverlay2} />
+
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroTagBadge}>
+              <Text style={styles.heroTagText}>HABIT MASTERY 🌱</Text>
+            </View>
+
+            {!isTab && canGoBack && (
+              <TouchableOpacity 
+                style={styles.heroBackBtn}
+                onPress={() => navigation.goBack()}
+                activeOpacity={0.8}
+              >
+                <Icon name="arrow-left" size={18} color="#B45309" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.heroTitleRow}>
+            <View>
+              <Text style={styles.heroTitle}>Habit Tracker 🎯</Text>
+              <Text style={styles.heroSubtitle}>
+                {habits.length === 0 
+                  ? 'Start building your streak today' 
+                  : `${completedCount} of ${habits.length} habits completed for this day`}
+              </Text>
             </View>
           </View>
-        </Card>
 
+          {/* Quick Metrics Bar inside Light Hero Panel */}
+          <View style={styles.heroMetricsBar}>
+            <View style={styles.heroMetricPill}>
+              <Text style={styles.heroMetricEmoji}>🔥</Text>
+              <Text style={styles.heroMetricLabel}>
+                {habits.reduce((max, h) => Math.max(max, h.streak), 0)} Day Best
+              </Text>
+            </View>
+            <View style={styles.heroMetricPill}>
+              <Text style={styles.heroMetricEmoji}>📋</Text>
+              <Text style={styles.heroMetricLabel}>{habits.length} Active</Text>
+            </View>
+            <View style={styles.heroMetricPill}>
+              <Text style={styles.heroMetricEmoji}>⚡</Text>
+              <Text style={styles.heroMetricLabel}>
+                {habits.length > 0 ? Math.round((completedCount / habits.length) * 100) : 0}% Today
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Weekly Consistency Header & Panel */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -242,7 +295,7 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
             <View style={styles.headerRightActionArea}>
               {weekOffset !== 0 && (
                 <TouchableOpacity onPress={() => setWeekOffset(0)} style={styles.resetButton} activeOpacity={0.7}>
-                  <Text style={styles.resetButtonText}>Reset</Text>
+                  <Text style={styles.resetButtonText}>Current Week</Text>
                 </TouchableOpacity>
               )}
               <Text style={styles.monthHeaderLabel}>{getWeekMonthLabel()}</Text>
@@ -376,7 +429,116 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingBottom: 20 },
+  // HERO BANNER (LIGHT COLOR PANEL - WARM SUNRISE & AMBER)
+  heroWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? 10 : 6,
+    paddingBottom: 4,
+  },
+  heroBanner: {
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#FED7AA',
+    backgroundColor: '#FFF7ED',
+    shadowColor: '#D97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  heroCircleOverlay1: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    top: -40,
+    right: -20,
+  },
+  heroCircleOverlay2: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(254, 215, 170, 0.45)',
+    bottom: -20,
+    left: -20,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  heroTagBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  heroTagText: {
+    color: '#B45309',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  heroBackBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    ...Shadow.sm,
+  },
+  heroTitleRow: {
+    marginBottom: 10,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  heroMetricsBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  heroMetricPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadow.sm,
+  },
+  heroMetricEmoji: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  heroMetricLabel: {
+    color: '#B45309',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  content: { paddingHorizontal: 20, paddingBottom: 20, paddingTop: 12 },
   overviewCard: { padding: 20, borderRadius: BorderRadius.xl, backgroundColor: Colors.card, ...Shadow.md, marginBottom: 24, marginTop: 10 },
   overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   overviewText: { flex: 1 },
