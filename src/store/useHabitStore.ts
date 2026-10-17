@@ -24,14 +24,23 @@ interface HabitState {
   habits: HabitItem[];
   isLoading: boolean;
   error: string | null;
+  completedRoutines: Record<string, string>;
   fetchHabits: () => Promise<void>;
   addHabit: (data: Partial<HabitItem> & { name: string }) => Promise<HabitItem>;
   updateHabit: (id: string, data: Partial<HabitItem>) => Promise<HabitItem>;
   deleteHabit: (id: string) => Promise<void>;
   toggleHabit: (id: string, date?: string) => Promise<HabitItem>;
+  claimRoutineReward: (routineType: string) => { alreadyClaimed: boolean; xpAwarded: number };
 }
 
 const STORAGE_KEY = 'selftrack_habits';
+
+export const getLocalTodayDateString = (d: Date = new Date()): string => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
 
 const DEFAULT_HABITS: HabitItem[] = [
   {
@@ -42,8 +51,8 @@ const DEFAULT_HABITS: HabitItem[] = [
     category: 'Health',
     streak_target: 7,
     current_streak: 5,
-    completed: true,
-    completed_days: { [new Date().toISOString().split('T')[0]]: true },
+    completed: false,
+    completed_days: {},
   },
   {
     id: 'habit_2',
@@ -90,15 +99,27 @@ export const useHabitStore = create<HabitState>((set, get) => ({
   habits: DEFAULT_HABITS,
   isLoading: false,
   error: null,
+  completedRoutines: {},
 
   fetchHabits: async () => {
     set({ isLoading: true, error: null });
+    const todayStr = getLocalTodayDateString();
 
     // Load from local storage first for instant rendering
     try {
+      const storedRoutines = await AsyncStorage.getItem('selftrack_completed_routines');
+      if (storedRoutines) {
+        set({ completedRoutines: JSON.parse(storedRoutines) });
+      }
+
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
-        set({ habits: JSON.parse(stored) });
+        const parsed: HabitItem[] = JSON.parse(stored);
+        const normalized = parsed.map((h) => ({
+          ...h,
+          completed: Boolean(h.completed_days?.[todayStr]),
+        }));
+        set({ habits: normalized });
       } else {
         await saveToStorage(DEFAULT_HABITS);
       }
@@ -108,8 +129,12 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     try {
       const res = await api.get('/habits');
       if (Array.isArray(res.data) && res.data.length > 0) {
-        set({ habits: res.data, isLoading: false });
-        await saveToStorage(res.data);
+        const normalizedApi = res.data.map((h: any) => ({
+          ...h,
+          completed: Boolean(h.completed_days?.[todayStr]),
+        }));
+        set({ habits: normalizedApi, isLoading: false });
+        await saveToStorage(normalizedApi);
       } else {
         set({ isLoading: false });
       }
@@ -193,10 +218,11 @@ export const useHabitStore = create<HabitState>((set, get) => ({
   },
 
   toggleHabit: async (id, date) => {
-    const todayStr = date || new Date().toISOString().split('T')[0];
+    const localToday = getLocalTodayDateString();
+    const todayStr = date || localToday;
 
     let toggledHabit: HabitItem | null = null;
-    const isToday = todayStr === new Date().toISOString().split('T')[0];
+    const isToday = todayStr === localToday;
     const updatedHabits = get().habits.map((h) => {
       if (h.id === id) {
         const isCurrentlyCompleted = Boolean(h.completed_days?.[todayStr]);
@@ -244,5 +270,29 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     }
 
     return toggledHabit || get().habits.find((h) => h.id === id)!;
+  },
+
+  claimRoutineReward: (routineType: string) => {
+    const todayStr = getLocalTodayDateString();
+    const routines = get().completedRoutines || {};
+    const lastClaimDate = routines[routineType];
+
+    if (lastClaimDate === todayStr) {
+      return { alreadyClaimed: true, xpAwarded: 0 };
+    }
+
+    const updated = { ...routines, [routineType]: todayStr };
+    set({ completedRoutines: updated });
+    AsyncStorage.setItem('selftrack_completed_routines', JSON.stringify(updated)).catch(() => {});
+
+    // Award +50 XP
+    try {
+      const authUser = useAuthStore.getState().user;
+      if (authUser) {
+        useAuthStore.getState().updateUserXp((authUser.total_xp || 0) + 50);
+      }
+    } catch (e) {}
+
+    return { alreadyClaimed: false, xpAwarded: 50 };
   },
 }));

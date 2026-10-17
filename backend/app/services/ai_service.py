@@ -43,35 +43,6 @@ Instructions:
     return context
 
 
-async def query_local_ollama(
-    prompt: str,
-    system_prompt: str,
-    endpoint: str = "http://localhost:11434",
-    model: str = "llama3.2:1b"
-) -> Optional[str]:
-    try:
-        url = f"{endpoint.rstrip('/')}/api/generate"
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "system": system_prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.7,
-                "num_predict": 300,
-            }
-        }
-        async with httpx.AsyncClient(timeout=25.0) as client:
-            resp = await client.post(url, json=payload)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("response", "").strip()
-            else:
-                logger.warning(f"Ollama returned HTTP {resp.status_code}: {resp.text}")
-                return None
-    except Exception as e:
-        logger.warning(f"Failed to reach local Ollama at {endpoint}: {e}")
-        return None
 
 
 async def query_gemini_api(
@@ -169,60 +140,39 @@ class AIService:
     ) -> Tuple[str, str]:
         system_prompt = build_system_context(user, habits, metrics, recent_mood)
         
-        mode = getattr(user_settings, "ai_mode", "local_ollama") if user_settings else "local_ollama"
+        mode = getattr(user_settings, "ai_mode", "gemini") if user_settings else "gemini"
         custom_key = getattr(user_settings, "custom_api_key", "") if user_settings else ""
-        ollama_ep = getattr(user_settings, "ollama_endpoint", settings.OLLAMA_HOST) if user_settings else settings.OLLAMA_HOST
-        model_name = getattr(user_settings, "ai_model_name", settings.DEFAULT_LOCAL_MODEL) if user_settings else settings.DEFAULT_LOCAL_MODEL
-        
-        # 1. If user chose Local Ollama
-        if mode == "local_ollama":
-            reply = await query_local_ollama(
-                prompt=message,
-                system_prompt=system_prompt,
-                endpoint=ollama_ep,
-                model=model_name or "llama3.2:1b"
-            )
-            if reply:
-                return reply, f"Ollama ({model_name})"
-                
-        # 2. If user chose Gemini or provided BYOK Gemini Key
+        model_name = getattr(user_settings, "ai_model_name", "gemini-2.5-flash") if user_settings else "gemini-2.5-flash"
+
+        # 1. Google Gemini API (or BYOK Gemini Key)
         if mode == "gemini" or (mode == "byok" and custom_key.startswith("AIza")):
             api_key = custom_key or settings.GEMINI_API_KEY
             if api_key:
+                selected_model = model_name if model_name.startswith("gemini") else "gemini-2.5-flash"
                 reply = await query_gemini_api(
                     prompt=message,
                     system_prompt=system_prompt,
                     api_key=api_key,
-                    model="gemini-2.5-flash"
+                    model=selected_model
                 )
                 if reply:
-                    return reply, "Google Gemini 2.5 Flash"
-                    
-        # 3. If user chose OpenAI or provided BYOK OpenAI Key
+                    return reply, f"Google Gemini ({selected_model})"
+
+        # 2. OpenAI API (or BYOK OpenAI Key)
         if mode == "openai" or (mode == "byok" and custom_key.startswith("sk-")):
             api_key = custom_key or settings.OPENAI_API_KEY
             if api_key:
+                selected_model = model_name if "gpt" in model_name else "gpt-4o-mini"
                 reply = await query_openai_api(
                     prompt=message,
                     system_prompt=system_prompt,
                     api_key=api_key,
-                    model="gpt-4o-mini"
+                    model=selected_model
                 )
                 if reply:
-                    return reply, "OpenAI GPT-4o-mini"
-                    
-        # 4. Fallback attempt: try local Ollama default host if not already tried
-        if mode != "local_ollama":
-            reply = await query_local_ollama(
-                prompt=message,
-                system_prompt=system_prompt,
-                endpoint=settings.OLLAMA_HOST,
-                model="llama3.2:1b"
-            )
-            if reply:
-                return reply, "Local Ollama (Fallback)"
+                    return reply, f"OpenAI ({selected_model})"
 
-        # 5. Intelligent contextual heuristic fallback
+        # 3. Contextual heuristic coaching fallback (offline / when API key is missing)
         reply = get_heuristic_coaching_fallback(message, user, habits)
         return reply, "SelfTrack Companion AI"
 

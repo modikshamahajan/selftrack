@@ -63,7 +63,6 @@ async def root():
         "version": settings.VERSION,
         "docs": "/docs",
         "ai_engine": {
-            "local_ollama": "supported",
             "cloud_gemini": "supported",
             "cloud_openai": "supported",
             "user_byok": "supported"

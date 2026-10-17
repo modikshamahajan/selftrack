@@ -11,6 +11,8 @@ LogBox.ignoreLogs([
   'Expo Go no longer supports remote push notifications',
   'Android Push Notifications',
   '[expo-notifications]',
+  'expo-notifications:',
+  '`expo-notifications` functionality is not fully supported in Expo Go',
   'cannot find native module ExpoSpeechRecognition',
 ]);
 

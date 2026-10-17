@@ -3,14 +3,29 @@ const path = require('path');
 
 const notifDir = path.join(__dirname, '..', 'node_modules', 'expo-notifications', 'build');
 
+// 0. Patch index.js to remove top-level console.warn in Expo Go
+const indexFile = path.join(notifDir, 'index.js');
+if (fs.existsSync(indexFile)) {
+  let content = fs.readFileSync(indexFile, 'utf8');
+  if (content.includes("console.warn(message);")) {
+    content = content.replace("console.warn(message);", "// console.warn(message);");
+    fs.writeFileSync(indexFile, content, 'utf8');
+    console.log('[SelfTrack] Silenced expo-notifications/build/index.js console.warn');
+  }
+}
+
 // 1. Patch warnOfExpoGoPushUsage.js
 const warnFile = path.join(notifDir, 'warnOfExpoGoPushUsage.js');
 if (fs.existsSync(warnFile)) {
   let content = fs.readFileSync(warnFile, 'utf8');
   if (content.includes("throw new Error(message);")) {
-    content = content.replace("throw new Error(message);", "didWarn = true; if (__DEV__) { console.warn(message); }");
+    content = content.replace("throw new Error(message);", "didWarn = true;");
     fs.writeFileSync(warnFile, content, 'utf8');
-    console.log('[SelfTrack] Patched warnOfExpoGoPushUsage.js');
+    console.log('[SelfTrack] Patched warnOfExpoGoPushUsage.js (silenced)');
+  } else if (content.includes("console.warn(message);")) {
+    content = content.replace("console.warn(message);", "");
+    fs.writeFileSync(warnFile, content, 'utf8');
+    console.log('[SelfTrack] Silenced warnOfExpoGoPushUsage.js console.warn');
   }
 }
 

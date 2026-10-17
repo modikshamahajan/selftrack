@@ -1,6 +1,7 @@
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import text
 from app.core.config import settings
 
 # Engine configuration
@@ -34,3 +35,16 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Safe migration for new columns if existing SQLite DB
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN last_active_at DATETIME"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN platform VARCHAR(50) DEFAULT 'unknown'"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE app_downloads ADD COLUMN app_version VARCHAR(50) DEFAULT '1.0.0'"))
+        except Exception:
+            pass

@@ -28,6 +28,7 @@ async def get_reward_summary(user: User = Depends(get_current_user), db: AsyncSe
         current_level_xp=current_level_xp,
         next_level_xp=next_level_xp,
         streak_count=user.streak_count,
+        badges_count=badges_count,
         badges_unlocked_count=badges_count
     )
 

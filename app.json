@@ -4,6 +4,7 @@
     "slug": "selftrack",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#E8F8F0",
@@ -23,11 +24,13 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E8F8F0"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
       "package": "com.selftrack.app",
-      "versionCode": 2,
+      "versionCode": 4,
       "usesCleartextTraffic": true,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.RECORD_AUDIO",
@@ -48,7 +51,8 @@
       "expo-speech-recognition",
       "expo-splash-screen",
       "expo-status-bar",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-audio"
     ],
     "scheme": "selftrack",
     "extra": {

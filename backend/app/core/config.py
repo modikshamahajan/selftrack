@@ -17,9 +17,8 @@ class Settings(BaseSettings):
     # Database (defaults to SQLite async for zero-config, supports PostgreSQL asyncpg)
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./selftrack.db")
     
-    # AI & Local LLM Defaults
-    OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    DEFAULT_LOCAL_MODEL: str = os.getenv("DEFAULT_LOCAL_MODEL", "llama3.2:1b")
+    # AI & Cloud API Defaults
+    DEFAULT_AI_MODEL: str = os.getenv("DEFAULT_AI_MODEL", "gemini-2.5-flash")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     

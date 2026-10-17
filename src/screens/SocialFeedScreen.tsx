@@ -229,6 +229,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     commentPost,
     addStory,
     likeStory,
+    deleteStory,
   } = useSocialStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -270,10 +271,29 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     fetchFeed();
   }, []);
 
+  const isCurrentUser = (nameStr?: string | null) => {
+    if (!nameStr) return false;
+    const n = nameStr.toLowerCase().trim();
+    const currentName = user?.name?.toLowerCase().trim() || '';
+    return (
+      n === 'you' ||
+      n.includes('(you)') ||
+      n.includes('explorer') ||
+      (currentName && (n === currentName || n.startsWith(currentName.split(' ')[0])))
+    );
+  };
+
   const activeUserStories = useMemo(() => {
     if (!viewingStoryUser) return [];
+    if (isCurrentUser(viewingStoryUser)) {
+      return stories.filter((s) => isCurrentUser(s.user)).reverse();
+    }
     return stories.filter((s) => s.user === viewingStoryUser).reverse();
-  }, [viewingStoryUser, stories]);
+  }, [viewingStoryUser, stories, user?.name]);
+
+  const myActiveStories = useMemo(() => {
+    return stories.filter((s) => isCurrentUser(s.user));
+  }, [stories, user?.name]);
 
   // Story auto-advance timer
   useEffect(() => {
@@ -457,19 +477,17 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     return result;
   }, [posts, searchQuery, selectedCategory]);
 
-  const uniqueUsers = useMemo(() => {
-    const users = new Set<string>();
-    const result: { name: string; emoji: string; avatar?: string }[] = [];
-    const emojis = ['👩', '👨', '👩‍🦰', '🧑', '👱‍♀️', '👲', '🧔'];
+  const communityMembers = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { name: string; fullName: string; emoji: string; avatar?: string }[] = [];
+    const emojis = ['🌟', '🔥', '⚡', '💪', '🏆', '🎯', '🌿', '💎'];
 
-    if (user?.name) {
-      users.add(user.name);
-      result.push({ name: user.name, emoji: '🌟', avatar: user.avatar_url });
-    }
-
+    // Collect distinct other members from feed posts
     posts.forEach((p) => {
-      if (!users.has(p.user) && result.length < 8) {
-        users.add(p.user);
+      if (!p.user || isCurrentUser(p.user)) return;
+      const firstName = p.user.split(' ')[0];
+      if (!seen.has(firstName) && result.length < 8) {
+        seen.add(firstName);
         const isUrl = Boolean(
           p.avatar &&
             (p.avatar.startsWith('http://') ||
@@ -477,17 +495,32 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               p.avatar.startsWith('file://'))
         );
         result.push({
-          name: p.user.split(' ')[0],
-          emoji:
-            !isUrl && p.avatar && p.avatar.length <= 4
-              ? p.avatar
-              : emojis[result.length % emojis.length],
-          avatar: isUrl ? p.avatar : p.user === user?.name ? user?.avatar_url : undefined,
+          name: firstName,
+          fullName: p.user,
+          emoji: !isUrl && p.avatar && p.avatar.length <= 4 ? p.avatar : emojis[result.length % emojis.length],
+          avatar: isUrl ? p.avatar : undefined,
         });
       }
     });
+
+    // Curated active community friends to ensure lively community
+    const defaultFriends = [
+      { name: 'Maya', fullName: 'Maya Lin', emoji: '🌟', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150' },
+      { name: 'Alex', fullName: 'Alex Rivera', emoji: '🔥', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150' },
+      { name: 'Liam', fullName: 'Liam Chen', emoji: '⚡', avatar: undefined },
+      { name: 'Sofia', fullName: 'Sofia Patel', emoji: '🌿', avatar: undefined },
+      { name: 'David', fullName: 'David Miller', emoji: '💪', avatar: undefined },
+    ];
+
+    defaultFriends.forEach((df) => {
+      if (!seen.has(df.name) && result.length < 6) {
+        seen.add(df.name);
+        result.push(df);
+      }
+    });
+
     return result;
-  }, [posts, user?.name, user?.avatar_url]);
+  }, [posts, user?.name]);
 
   const groupedStories = useMemo(() => {
     const groups: Record<string, typeof stories> = {};
@@ -503,9 +536,12 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const viewerAvatar = useMemo(() => {
     if (!viewingStoryUser) return { emoji: '🌟', avatar: undefined };
-    const found = uniqueUsers.find((u) => viewingStoryUser.startsWith(u.name));
+    if (isCurrentUser(viewingStoryUser)) {
+      return { emoji: '🌟', avatar: user?.avatar_url };
+    }
+    const found = communityMembers.find((u) => viewingStoryUser.startsWith(u.name));
     return found || { emoji: '🌟', avatar: undefined };
-  }, [viewingStoryUser, uniqueUsers]);
+  }, [viewingStoryUser, communityMembers, user?.avatar_url]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -544,8 +580,8 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   end={{ x: 1, y: 0 }}
                   style={styles.pulseBadgeGrad}
                 >
-                  <Icon name="zap" size={12} color="#FFF" />
-                  <Text style={styles.pulseBadgeText}>COMMUNITY PULSE</Text>
+                  <Icon name="users" size={12} color="#FFF" />
+                  <Text style={styles.pulseBadgeText}>COMMUNITY & SOCIAL FEED</Text>
                 </LinearGradient>
               </View>
 
@@ -571,9 +607,9 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
             {/* Hero Main Title */}
             <View style={styles.heroTitleBox}>
-              <Text style={styles.heroTitle}>SelfTrack Tribe 🚀</Text>
+              <Text style={styles.heroTitle}>Community Circle & Streaks 🚀</Text>
               <Text style={styles.heroSubtitle}>
-                Cheer friends, celebrate consistency & stay unstoppable together.
+                Cheer friends, celebrate milestones & share daily habit wins together.
               </Text>
             </View>
 
@@ -647,68 +683,121 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
         {/* STORIES / HIGHLIGHTS CAROUSEL */}
         <View style={styles.storiesSection}>
+          <View style={styles.storiesSectionHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Icon name="zap" size={15} color="#E11D48" />
+              <Text style={styles.storiesSectionTitle}>Daily Wins & Streaks</Text>
+            </View>
+            <Text style={styles.storiesSectionSubtitle}>24h highlights</Text>
+          </View>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.storiesBarContent}
           >
-            {/* Create Story Button */}
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => setStoryModalVisible(true)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.createStoryRing}>
-                <LinearGradient
-                  colors={['#EEF2FF', '#E0E7FF']}
-                  style={styles.createStoryInner}
-                >
-                  <Icon name="plus" size={24} color="#4F46E5" />
-                </LinearGradient>
-                <LinearGradient
-                  colors={['#4F46E5', '#7C3AED']}
-                  style={styles.createStoryBadge}
-                >
-                  <Icon name="plus" size={10} color="#FFF" />
-                </LinearGradient>
-              </View>
-              <Text style={styles.storyLabel}>Your Win</Text>
-            </TouchableOpacity>
-
-            {/* Active User Stories */}
-            {groupedStories.map((group) => {
-              const foundUser = uniqueUsers.find((u) => group.user.startsWith(u.name));
-              return (
+            {/* If user has active stories: show active StoryAvatar with vibrant gradient ring to review their win! */}
+            {myActiveStories.length > 0 ? (
+              <>
                 <TouchableOpacity
-                  key={group.user}
                   style={styles.storyItem}
                   onPress={() => {
-                    setViewingStoryUser(group.user);
+                    setViewingStoryUser(user?.name || 'You');
                     setCurrentStoryIndex(0);
                   }}
                   activeOpacity={0.8}
                 >
                   <StoryAvatar
-                    avatar={foundUser?.avatar}
-                    emoji={foundUser?.emoji}
+                    avatar={user?.avatar_url}
+                    emoji="🌟"
                     hasUnread={true}
                   />
-                  <Text style={styles.storyLabel} numberOfLines={1}>
-                    {group.user.split(' ')[0]}
+                  <Text style={[styles.storyLabel, { fontWeight: '700', color: '#4F46E5' }]} numberOfLines={1}>
+                    Your Win ({myActiveStories.length})
                   </Text>
                 </TouchableOpacity>
-              );
-            })}
 
-            {/* Other Community Members */}
-            {uniqueUsers
-              .filter((u) => !groupedStories.some((g) => g.user.startsWith(u.name)))
+                {/* Add More Win Button */}
+                <TouchableOpacity
+                  style={styles.storyItem}
+                  onPress={() => setStoryModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.createStoryRing}>
+                    <LinearGradient
+                      colors={['#EEF2FF', '#E0E7FF']}
+                      style={styles.createStoryInner}
+                    >
+                      <Icon name="plus" size={22} color="#4F46E5" />
+                    </LinearGradient>
+                  </View>
+                  <Text style={styles.storyLabel}>+ Add</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              /* Create Story Button if user has no stories */
+              <TouchableOpacity
+                style={styles.storyItem}
+                onPress={() => setStoryModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.createStoryRing}>
+                  <LinearGradient
+                    colors={['#EEF2FF', '#E0E7FF']}
+                    style={styles.createStoryInner}
+                  >
+                    {user?.avatar_url ? (
+                      <Image source={{ uri: user.avatar_url }} style={{ width: '100%', height: '100%', borderRadius: 28 }} />
+                    ) : (
+                      <Icon name="plus" size={24} color="#4F46E5" />
+                    )}
+                  </LinearGradient>
+                  <LinearGradient
+                    colors={['#4F46E5', '#7C3AED']}
+                    style={styles.createStoryBadge}
+                  >
+                    <Icon name="plus" size={10} color="#FFF" />
+                  </LinearGradient>
+                </View>
+                <Text style={styles.storyLabel}>Your Win</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Active User Stories from other friends */}
+            {groupedStories
+              .filter((group) => !isCurrentUser(group.user))
+              .map((group) => {
+                const foundUser = communityMembers.find((u) => u.fullName.startsWith(group.user) || group.user.startsWith(u.name));
+                return (
+                  <TouchableOpacity
+                    key={group.user}
+                    style={styles.storyItem}
+                    onPress={() => {
+                      setViewingStoryUser(group.user);
+                      setCurrentStoryIndex(0);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <StoryAvatar
+                      avatar={foundUser?.avatar}
+                      emoji={foundUser?.emoji}
+                      hasUnread={true}
+                    />
+                    <Text style={styles.storyLabel} numberOfLines={1}>
+                      {group.user.split(' ')[0]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+            {/* Other Community Members (never duplicates current user) */}
+            {communityMembers
+              .filter((u) => !groupedStories.some((g) => g.user.startsWith(u.name) || u.fullName.startsWith(g.user)))
               .map((u, i) => (
                 <TouchableOpacity
-                  key={`member-${i}`}
+                  key={`member-${u.name}-${i}`}
                   style={styles.storyItem}
                   onPress={() => {
-                    Alert.alert(u.name, `${u.name} is on a consistent streak! Give them a cheer.`);
+                    Alert.alert(u.name, `${u.fullName} is on a consistent streak! Give them a cheer.`);
                   }}
                   activeOpacity={0.8}
                 >
@@ -975,10 +1064,10 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       {/* CREATE POST MODAL */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalBackdrop}
         >
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { maxHeight: '88%' }]}>
             <View style={styles.sheetHandle} />
 
             <View style={styles.modalHeaderRow}>
@@ -997,88 +1086,94 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              style={styles.sheetTextInput}
-              placeholder="What healthy habit, streak, or milestone did you hit today?"
-              placeholderTextColor="#94A3B8"
-              multiline
-              numberOfLines={4}
-              value={postContent}
-              onChangeText={setPostContent}
-            />
-
-            {/* Achievement Selection */}
-            <Text style={styles.sheetSectionTitle}>Tag a Milestone (Optional)</Text>
             <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 16 }}
             >
-              {ACHIEVEMENT_SUGGESTIONS.map((sug) => {
-                const isSelected = selectedAchievement === sug;
-                return (
-                  <TouchableOpacity
-                    key={sug}
-                    style={[styles.sugChip, isSelected && styles.sugChipActive]}
-                    onPress={() => setSelectedAchievement(isSelected ? '' : sug)}
-                  >
-                    <Text
-                      style={[
-                        styles.sugChipText,
-                        isSelected && { color: '#FFF', fontWeight: '700' },
-                      ]}
-                    >
-                      {sug}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+              <TextInput
+                style={styles.sheetTextInput}
+                placeholder="What healthy habit, streak, or milestone did you hit today?"
+                placeholderTextColor="#94A3B8"
+                multiline
+                numberOfLines={4}
+                value={postContent}
+                onChangeText={setPostContent}
+              />
 
-            {selectedAchievement === 'Other' && (
-              <View style={styles.customAchievementRow}>
-                <Icon name="award" size={18} color="#D97706" />
-                <TextInput
-                  style={styles.customAchievementInput}
-                  placeholder="Type custom milestone title..."
-                  placeholderTextColor="#94A3B8"
-                  value={customAchievement}
-                  onChangeText={setCustomAchievement}
-                  autoFocus
-                />
-              </View>
-            )}
-
-            {/* Photo Attachment Preview / Button */}
-            {postImageUri ? (
-              <View style={styles.imagePreviewWrap}>
-                <Image source={{ uri: postImageUri }} style={styles.imagePreviewThumb} />
-                <TouchableOpacity
-                  style={styles.removeImageBtn}
-                  onPress={() => setPostImageUri(null)}
-                >
-                  <Icon name="x" size={14} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.attachPhotoBtn}
-                onPress={handlePickPostImage}
-                activeOpacity={0.8}
+              {/* Achievement Selection */}
+              <Text style={styles.sheetSectionTitle}>Tag a Milestone (Optional)</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
               >
-                <Icon name="image" size={18} color="#4F46E5" />
-                <Text style={styles.attachPhotoText}>Add Photo / Progress Snap</Text>
-              </TouchableOpacity>
-            )}
+                {ACHIEVEMENT_SUGGESTIONS.map((sug) => {
+                  const isSelected = selectedAchievement === sug;
+                  return (
+                    <TouchableOpacity
+                      key={sug}
+                      style={[styles.sugChip, isSelected && styles.sugChipActive]}
+                      onPress={() => setSelectedAchievement(isSelected ? '' : sug)}
+                    >
+                      <Text
+                        style={[
+                          styles.sugChipText,
+                          isSelected && { color: '#FFF', fontWeight: '700' },
+                        ]}
+                      >
+                        {sug}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
 
-            <Button
-              title="Share With Tribe 🚀"
-              onPress={handleCreatePost}
-              loading={isSubmitting}
-              disabled={!postContent.trim()}
-              variant="gradient"
-              style={{ marginTop: 14 }}
-            />
+              {selectedAchievement === 'Other' && (
+                <View style={styles.customAchievementRow}>
+                  <Icon name="award" size={18} color="#D97706" />
+                  <TextInput
+                    style={styles.customAchievementInput}
+                    placeholder="Type custom milestone title..."
+                    placeholderTextColor="#94A3B8"
+                    value={customAchievement}
+                    onChangeText={setCustomAchievement}
+                    autoFocus
+                  />
+                </View>
+              )}
+
+              {/* Photo Attachment Preview / Button */}
+              {postImageUri ? (
+                <View style={styles.imagePreviewWrap}>
+                  <Image source={{ uri: postImageUri }} style={styles.imagePreviewThumb} />
+                  <TouchableOpacity
+                    style={styles.removeImageBtn}
+                    onPress={() => setPostImageUri(null)}
+                  >
+                    <Icon name="x" size={14} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.attachPhotoBtn}
+                  onPress={handlePickPostImage}
+                  activeOpacity={0.8}
+                >
+                  <Icon name="image" size={18} color="#4F46E5" />
+                  <Text style={styles.attachPhotoText}>Add Photo / Progress Snap</Text>
+                </TouchableOpacity>
+              )}
+
+              <Button
+                title="Share With Tribe 🚀"
+                onPress={handleCreatePost}
+                loading={isSubmitting}
+                disabled={!postContent.trim()}
+                variant="gradient"
+                style={{ marginTop: 14 }}
+              />
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1086,7 +1181,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       {/* COMMENTS MODAL */}
       <Modal visible={commentModalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalBackdrop}
         >
           <View style={[styles.modalSheet, { maxHeight: '85%' }]}>
@@ -1304,15 +1399,39 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <PostAvatar avatar={viewerAvatar.avatar} size={38} />
               <View>
-                <Text style={styles.storyViewerName}>{viewingStoryUser}</Text>
+                <Text style={styles.storyViewerName}>
+                  {isCurrentUser(viewingStoryUser) ? `${user?.name || 'You'} (Your Win)` : viewingStoryUser}
+                </Text>
                 <Text style={styles.storyViewerTime}>
                   {activeUserStories[currentStoryIndex]?.time}
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={() => setViewingStoryUser(null)}>
-              <Icon name="x" size={26} color="#FFF" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              {isCurrentUser(viewingStoryUser) && activeUserStories[currentStoryIndex] && (
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert('Delete Story', 'Do you want to delete this win?', [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: () => {
+                          deleteStory(activeUserStories[currentStoryIndex].id);
+                          setViewingStoryUser(null);
+                        },
+                      },
+                    ]);
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Icon name="trash-2" size={20} color="#FFF" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => setViewingStoryUser(null)}>
+                <Icon name="x" size={26} color="#FFF" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Story View Content */}
@@ -1586,6 +1705,25 @@ const styles = StyleSheet.create({
   storiesSection: {
     paddingVertical: 14,
     backgroundColor: '#F8FAFC',
+  },
+  storiesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  storiesSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  storiesSectionSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
   },
   storiesBarContent: {
     paddingHorizontal: 20,

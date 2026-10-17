@@ -9,6 +9,7 @@ import {
   Animated,
   RefreshControl,
 } from 'react-native';
+import { Feather as Icon } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getScreenBgColor } from '../theme/screenBgColors';
@@ -23,41 +24,95 @@ const PURPLE_BADGE = require('../../assets/Images/purplecandy.png');
 const STAR_BADGE = require('../../assets/Images/goldstar.png');
 const TROPHY_ICON = require('../../assets/Images/trophyicon.png');
 const WATER_ICON = require('../../assets/Images/waterdropicon.png');
+const SHOES_ICON = require('../../assets/Images/shoes.png');
 
 const BADGE_IMAGES: Record<string, any> = {
+  // Fire / streak badges
   firebadge: FIRE_BADGE,
+  'firebadge.png': FIRE_BADGE,
   early_bird: FIRE_BADGE,
+  'early-bird': FIRE_BADGE,
+  'streak-master': FIRE_BADGE,
+  streak: FIRE_BADGE,
+
+  // Purple candy / consistency badges
   purplecandy: PURPLE_BADGE,
+  'purplecandy.png': PURPLE_BADGE,
   consistent: PURPLE_BADGE,
+  'consistent-habit': PURPLE_BADGE,
+
+  // Trophy / champion / focus badges
   trophyicon: TROPHY_ICON,
+  'trophyicon.png': TROPHY_ICON,
   focused: TROPHY_ICON,
+  champion: TROPHY_ICON,
+
+  // Star / milestone / achiever badges
   goldstar: STAR_BADGE,
+  'goldstar.png': STAR_BADGE,
   achiever: STAR_BADGE,
+  'first-step': STAR_BADGE,
+  first_step: STAR_BADGE,
+
+  // Water drop / hydration badges
+  waterdropicon: WATER_ICON,
+  'waterdropicon.png': WATER_ICON,
+  'hydration-hero': WATER_ICON,
+  hydration_hero: WATER_ICON,
+  water: WATER_ICON,
+
+  // Steps / fitness badges
+  shoes: SHOES_ICON,
+  'shoes.png': SHOES_ICON,
+  fitness: SHOES_ICON,
+  steps: SHOES_ICON,
+};
+
+const resolveBadgeImage = (b: { image_name?: string; slug?: string; title?: string }) => {
+  const imgKey = (b.image_name || '').toLowerCase().trim();
+  const slugKey = (b.slug || '').toLowerCase().trim();
+  const titleKey = (b.title || '').toLowerCase().trim();
+
+  if (BADGE_IMAGES[imgKey]) return BADGE_IMAGES[imgKey];
+  if (BADGE_IMAGES[slugKey]) return BADGE_IMAGES[slugKey];
+  if (BADGE_IMAGES[titleKey]) return BADGE_IMAGES[titleKey];
+
+  if (titleKey.includes('star') || titleKey.includes('first') || titleKey.includes('step') || titleKey.includes('achiever')) return STAR_BADGE;
+  if (titleKey.includes('water') || titleKey.includes('hydrat')) return WATER_ICON;
+  if (titleKey.includes('fire') || titleKey.includes('streak') || titleKey.includes('early') || titleKey.includes('bird')) return FIRE_BADGE;
+  if (titleKey.includes('purple') || titleKey.includes('candy') || titleKey.includes('consist')) return PURPLE_BADGE;
+  if (titleKey.includes('step') || titleKey.includes('walk') || titleKey.includes('run')) return SHOES_ICON;
+
+  return TROPHY_ICON;
 };
 
 const DEFAULT_BADGES = [
   {
     title: 'Early Bird',
     image: FIRE_BADGE,
-    bg: '#FFF7EE',
+    bg: '#FFF1F2',
+    border: '#FECDD3',
     is_unlocked: true,
   },
   {
     title: 'Consistent',
     image: PURPLE_BADGE,
-    bg: '#F7F2FF',
+    bg: '#F5F3FF',
+    border: '#DDD6FE',
     is_unlocked: true,
   },
   {
     title: 'Focused',
     image: TROPHY_ICON,
-    bg: '#EEF9FF',
+    bg: '#ECFDF5',
+    border: '#A7F3D0',
     is_unlocked: false,
   },
   {
     title: 'Achiever',
     image: STAR_BADGE,
-    bg: '#FFF8E8',
+    bg: '#FFFBEB',
+    border: '#FDE68A',
     is_unlocked: false,
   },
 ];
@@ -245,13 +300,25 @@ const RewardsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     outputRange: ['-8deg', '8deg'],
   });
 
+  const BADGE_COLOR_PALETTES = [
+    { bg: '#FFF1F2', border: '#FECDD3' }, // Rose / fire
+    { bg: '#F5F3FF', border: '#DDD6FE' }, // Violet / purple candy
+    { bg: '#ECFDF5', border: '#A7F3D0' }, // Emerald / trophy
+    { bg: '#FFFBEB', border: '#FDE68A' }, // Amber / gold star
+    { bg: '#F0F9FF', border: '#BAE6FD' }, // Sky / water
+  ];
+
   const displayBadges = badges.length > 0
-    ? badges.map((b, idx) => ({
-        title: b.title,
-        image: BADGE_IMAGES[b.image_name] || BADGE_IMAGES[b.slug] || TROPHY_ICON,
-        bg: ['#FFF7EE', '#F7F2FF', '#EEF9FF', '#FFF8E8'][idx % 4],
-        is_unlocked: b.is_unlocked,
-      }))
+    ? badges.map((b, idx) => {
+        const palette = BADGE_COLOR_PALETTES[idx % BADGE_COLOR_PALETTES.length];
+        return {
+          title: b.title,
+          image: resolveBadgeImage(b),
+          bg: palette.bg,
+          border: palette.border,
+          is_unlocked: b.is_unlocked,
+        };
+      })
     : DEFAULT_BADGES;
 
   const [refreshing, setRefreshing] = useState(false);
@@ -302,9 +369,9 @@ const RewardsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     {
       title: `${displayStreak} Days Streak`,
       subtitle: displayStreak > 0 ? 'Keep going!' : 'Start your streak today!',
-      xp: `+${displayStreak * 10} XP`,
-      image: TROPHY_ICON,
-      color: '#2ECC71',
+      xp: `+${Math.max(10, displayStreak * 10)} XP`,
+      image: FIRE_BADGE,
+      color: '#EF4444',
     },
     ...ACHIEVEMENTS.slice(1),
   ];
@@ -393,15 +460,30 @@ const RewardsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     styles.badgeImageWrapper,
                     {
                       backgroundColor: item.bg,
-                      opacity: item.is_unlocked ? 1 : 0.45,
+                      borderColor: item.border || '#E2E8F0',
+                      borderWidth: 1.5,
+                      opacity: item.is_unlocked ? 1 : 0.65,
                     },
                     animatedStyle,
                   ]}
                 >
                   <Image source={item.image} style={styles.badgeImage} />
+                  {!item.is_unlocked && (
+                    <View style={styles.lockBadgeOverlay}>
+                      <Icon name="lock" size={10} color="#FFFFFF" />
+                    </View>
+                  )}
                 </Animated.View>
 
-                <Text style={styles.badgeText}>{item.title}</Text>
+                <Text
+                  style={[
+                    styles.badgeText,
+                    !item.is_unlocked && { color: '#94A3B8' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -648,35 +730,47 @@ const styles = StyleSheet.create({
   },
 
   badgeImageWrapper: {
-    width: 76,
-    height: 76,
-    borderRadius: 24,
+    width: 68,
+    height: 68,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-
-    shadowColor: '#000',
+    position: 'relative',
+    shadowColor: '#0F172A',
     shadowOffset: {
       width: 0,
-      height: 5,
+      height: 4,
     },
-
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 3,
   },
 
   badgeImage: {
-    width: 52,
-    height: 52,
+    width: 44,
+    height: 44,
     resizeMode: 'contain',
   },
 
+  lockBadgeOverlay: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#64748B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+
   badgeText: {
-    marginTop: 12,
-    fontSize: 12,
+    marginTop: 8,
+    fontSize: 11.5,
     textAlign: 'center',
-    color: '#6B7280',
+    color: '#334155',
     fontWeight: '700',
   },
 

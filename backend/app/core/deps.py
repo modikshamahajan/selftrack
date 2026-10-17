@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,5 +47,12 @@ async def get_current_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+        
+    # Update last active timestamp
+    try:
+        user.last_active_at = datetime.now(timezone.utc)
+        await db.commit()
+    except Exception:
+        pass
         
     return user

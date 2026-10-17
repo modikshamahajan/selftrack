@@ -470,6 +470,22 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [activeInputText, setActiveInputText] = useState<string>('');
   const [activeFormat, setActiveFormat] = useState<FormatType | null>(null);
   const textInputRef = useRef<TextInput>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Helper to calculate the next sequence number for a numbered list
   const getNextListNumber = (
@@ -608,7 +624,11 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       setActiveFormat(format);
       setInputText(serializeToMarkdown(updated, '', format));
     }
-    setTimeout(() => textInputRef.current?.focus(), 50);
+    // Reliable auto-focus ensuring keyboard opens/stays open
+    requestAnimationFrame(() => {
+      textInputRef.current?.focus();
+    });
+    setTimeout(() => textInputRef.current?.focus(), 60);
   };
 
   // Handles typing & auto-advancement on Enter key for bullet, number (1. -> 2.), checklist, etc.
@@ -1205,7 +1225,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 110 }}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 110 }}
         >
           {/* TOP LIGHT COLOR HERO PANEL */}
           <View style={styles.heroWrapper}>
@@ -1263,10 +1283,10 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   <Icon
                     name={isTodaySelected ? "check-circle" : "corner-down-left"}
                     size={14}
-                    color={isTodaySelected ? "#059669" : "#FFF"}
+                    color={isTodaySelected ? "#059669" : "#4F46E5"}
                     style={{ marginRight: 5 }}
                   />
-                  <Text style={[styles.heroJumpDateText, isTodaySelected && { color: "#059669" }]}>
+                  <Text style={[styles.heroJumpDateText, { color: isTodaySelected ? "#059669" : "#4F46E5" }]}>
                     {isTodaySelected ? "Today Active" : "Tap to set date"}
                   </Text>
                 </TouchableOpacity>
@@ -1525,7 +1545,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.markdownToolbarScroll}
-                  keyboardShouldPersistTaps="handled"
+                  keyboardShouldPersistTaps="always"
                 >
                   {/* Bold */}
                   <TouchableOpacity
@@ -2018,7 +2038,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   heroJumpDateBtnActive: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
     ...Shadow.sm,
   },
   heroJumpDateBtnToday: {
@@ -2030,7 +2052,7 @@ const styles = StyleSheet.create({
   heroJumpDateText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#FFF',
+    color: '#4F46E5',
   },
 
   // 1-WEEK DATE STRIP

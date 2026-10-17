@@ -63,6 +63,10 @@ async def sync_health(
     update_data = req.model_dump(exclude_unset=True, exclude={"date"})
     for k, v in update_data.items():
         if v is not None:
+            if k == "water_glasses":
+                v = max(0, min(20, int(v)))
+            elif k == "water_goal":
+                v = max(1, min(20, int(v)))
             setattr(metric, k, v)
             
     await db.commit()
@@ -79,7 +83,7 @@ async def update_water(
 ):
     target_date = date or get_today_str()
     metric = await get_or_create_metric(db, user.id, target_date)
-    metric.water_glasses = max(0, metric.water_glasses + delta)
+    metric.water_glasses = max(0, min(20, metric.water_glasses + delta))
     
     # Award XP if goal reached
     if metric.water_glasses == metric.water_goal:

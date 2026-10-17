@@ -22,7 +22,6 @@ import Button from '../components/Button';
 import { useSettingsStore } from '../store/useSettingsStore';
 import api from '../services/api';
 
-const OLLAMA_MODELS = ['llama3.2:1b', 'llama3.2:3b', 'mistral', 'deepseek-r1:1.5b'];
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'];
 const OPENAI_MODELS = ['gpt-4o-mini', 'gpt-4o'];
 
@@ -30,9 +29,12 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const bgColor = getScreenBgColor('Settings');
   const { settings, fetchSettings, updateSetting, updateMultipleSettings, setCustomApiUrl } = useSettingsStore();
 
-  const [aiMode, setAiMode] = useState(settings.ai_mode || 'local_ollama');
-  const [modelName, setModelName] = useState(settings.ai_model_name || 'llama3.2:1b');
-  const [ollamaEndpoint, setOllamaEndpoint] = useState(settings.ollama_endpoint || 'http://10.0.2.2:11434');
+  const [aiMode, setAiMode] = useState(settings.ai_mode === 'openai' ? 'openai' : 'gemini');
+  const [modelName, setModelName] = useState(
+    settings.ai_model_name && (settings.ai_model_name.includes('gemini') || settings.ai_model_name.includes('gpt'))
+      ? settings.ai_model_name
+      : 'gemini-2.5-flash'
+  );
   const [apiKey, setApiKey] = useState(settings.custom_api_key || '');
   const [showApiKey, setShowApiKey] = useState(false);
   const [backendUrl, setBackendUrl] = useState('http://10.0.2.2:5000');
@@ -47,9 +49,12 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    setAiMode(settings.ai_mode || 'local_ollama');
-    setModelName(settings.ai_model_name || 'llama3.2:1b');
-    setOllamaEndpoint(settings.ollama_endpoint || 'http://10.0.2.2:11434');
+    setAiMode(settings.ai_mode === 'openai' ? 'openai' : 'gemini');
+    setModelName(
+      settings.ai_model_name && (settings.ai_model_name.includes('gemini') || settings.ai_model_name.includes('gpt'))
+        ? settings.ai_model_name
+        : 'gemini-2.5-flash'
+    );
     setApiKey(settings.custom_api_key || '');
   }, [settings]);
 
@@ -59,10 +64,9 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       await updateMultipleSettings({
         ai_mode: aiMode,
         ai_model_name: modelName,
-        ollama_endpoint: ollamaEndpoint,
         custom_api_key: apiKey,
       });
-      Alert.alert('Settings Saved', 'Your AI engine configuration has been saved successfully.');
+      Alert.alert('Settings Saved', 'Your AI API configuration has been saved successfully.');
     } catch {
       Alert.alert('Error', 'Failed to save settings.');
     } finally {
@@ -97,28 +101,11 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           <Text style={styles.sectionTitle}>AI Intelligence Engine</Text>
           <Card style={styles.sectionCard}>
             <Text style={styles.cardHeaderDesc}>
-              Choose how you want your AI coaching assistant to run. SelfTrack supports both 100% offline Local LLMs (Ollama) and high-speed Cloud APIs.
+              Choose your AI coaching assistant provider. SelfTrack connects with high-speed, secure Cloud AI APIs (Google Gemini & OpenAI BYOK).
             </Text>
 
             {/* Provider Tabs */}
             <View style={styles.providerTabs}>
-              <TouchableOpacity
-                style={[styles.providerTab, aiMode === 'local_ollama' && styles.providerTabActive]}
-                onPress={() => {
-                  setAiMode('local_ollama');
-                  setModelName('llama3.2:1b');
-                }}
-              >
-                <Icon
-                  name="cpu"
-                  size={16}
-                  color={aiMode === 'local_ollama' ? '#FFFFFF' : Colors.textSecondary}
-                />
-                <Text style={[styles.providerTabText, aiMode === 'local_ollama' && styles.providerTabTextActive]}>
-                  Local Ollama
-                </Text>
-              </TouchableOpacity>
-
               <TouchableOpacity
                 style={[styles.providerTab, aiMode === 'gemini' && styles.providerTabActive]}
                 onPress={() => {
@@ -132,7 +119,7 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   color={aiMode === 'gemini' ? '#FFFFFF' : Colors.textSecondary}
                 />
                 <Text style={[styles.providerTabText, aiMode === 'gemini' && styles.providerTabTextActive]}>
-                  Gemini API
+                  Google Gemini API
                 </Text>
               </TouchableOpacity>
 
@@ -149,43 +136,10 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   color={aiMode === 'openai' ? '#FFFFFF' : Colors.textSecondary}
                 />
                 <Text style={[styles.providerTabText, aiMode === 'openai' && styles.providerTabTextActive]}>
-                  OpenAI / BYOK
+                  OpenAI API (BYOK)
                 </Text>
               </TouchableOpacity>
             </View>
-
-            {/* Ollama Specific Settings */}
-            {aiMode === 'local_ollama' && (
-              <View style={styles.configFields}>
-                <Text style={styles.fieldLabel}>Ollama Host Endpoint</Text>
-                <TextInput
-                  style={styles.input}
-                  value={ollamaEndpoint}
-                  onChangeText={setOllamaEndpoint}
-                  placeholder="http://10.0.2.2:11434"
-                  placeholderTextColor={Colors.textTertiary}
-                  autoCapitalize="none"
-                />
-                <Text style={styles.fieldHint}>
-                  For Android Emulator use http://10.0.2.2:11434. For physical phones, use your computer's LAN IP.
-                </Text>
-
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Model Selection</Text>
-                <View style={styles.modelPillRow}>
-                  {OLLAMA_MODELS.map((m) => (
-                    <TouchableOpacity
-                      key={m}
-                      style={[styles.modelPill, modelName === m && styles.modelPillActive]}
-                      onPress={() => setModelName(m)}
-                    >
-                      <Text style={[styles.modelPillText, modelName === m && styles.modelPillTextActive]}>
-                        {m}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
 
             {/* Cloud API Key (Gemini / OpenAI) */}
             {(aiMode === 'gemini' || aiMode === 'openai') && (
@@ -286,6 +240,23 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 size="sm"
               />
             </View>
+
+            <TouchableOpacity
+              style={[styles.settingRow, styles.settingBorder]}
+              onPress={() => navigation.navigate('Notifications', { initialTab: 'events' })}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingLeft}>
+                <Icon name="calendar" size={18} color={Colors.primary} />
+                <View>
+                  <Text style={styles.settingLabel}>Special Event Reminders</Text>
+                  <Text style={{ ...Typography.caption, fontSize: 11, color: Colors.textTertiary }}>
+                    Birthdays, anniversaries, meetings & occasions
+                  </Text>
+                </View>
+              </View>
+              <Icon name="chevron-right" size={16} color={Colors.textTertiary} />
+            </TouchableOpacity>
 
             <View style={[styles.settingRow, styles.settingBorder]}>
               <View style={styles.settingLeft}>
@@ -404,9 +375,9 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               <Text style={styles.policyText}>
                 All personal data is encrypted in transit using industry-standard protocols. We do not sell or rent your personal information to third parties.
               </Text>
-              <Text style={styles.policyHeading}>3. AI & On-Device Processing</Text>
+              <Text style={styles.policyHeading}>3. AI & Cloud Processing</Text>
               <Text style={styles.policyText}>
-                When using local LLMs (such as Ollama), your AI queries stay on your local network. Cloud AI requests are processed solely to generate insights and are not retained for external model training.
+                AI coaching requests are processed securely via encrypted Cloud AI APIs (Google Gemini & OpenAI) solely to generate insights and are not retained for external model training.
               </Text>
               <Text style={styles.policyHeading}>4. Data Portability & Erasure</Text>
               <Text style={styles.policyText}>

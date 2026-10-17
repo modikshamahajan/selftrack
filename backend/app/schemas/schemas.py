@@ -90,8 +90,8 @@ class UserSettingsUpdate(BaseModel):
 class UserSettingsResponse(BaseModel):
     ai_mode: str
     ai_model_name: str
-    ollama_endpoint: str
     custom_api_key: str
+    ollama_endpoint: Optional[str] = ""
     ai_suggestions: bool
     daily_summary: bool
     ai_personality: str
@@ -263,6 +263,7 @@ class RewardSummaryResponse(BaseModel):
     next_level_xp: int
     streak_count: int
     badges_count: int
+    badges_unlocked_count: Optional[int] = 0
 
 
 class LeaderboardItem(BaseModel):
@@ -310,6 +311,14 @@ class SocialPostResponse(BaseModel):
 
 
 # ---------------------- NOTIFICATION SCHEMAS ----------------------
+class NotificationCreate(BaseModel):
+    title: str
+    message: str
+    category: str = "general"
+    icon: str = "bell"
+    color: str = "#2ECC71"
+
+
 class NotificationResponse(BaseModel):
     id: str
     title: str

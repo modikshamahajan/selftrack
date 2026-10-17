@@ -179,10 +179,12 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
   }, []);
 
   const currentSteps = (metrics?.steps || 0) + (selectedDate === todayStr ? liveSteps : 0);
-  const activeFoodLog = foodLogs || [];
+  const activeFoodLog = (foodLogs || []).filter(
+    (item) => item.date === selectedDate || item.date?.startsWith(selectedDate)
+  );
   const totalCalories = activeFoodLog.reduce((sum, item) => sum + item.calories * item.qty, 0);
-  const glasses = metrics?.water_glasses || 0;
-  const waterGoal = metrics?.water_goal || 8;
+  const glasses = Math.min(20, Math.max(0, metrics?.water_glasses || 0));
+  const waterGoal = Math.min(20, Math.max(1, metrics?.water_goal || 8));
   const dailyGoal = metrics?.step_goal || 10000;
 
   const generateWeeklyDaysArray = (): Date[] => {
@@ -259,16 +261,22 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
   const saveWaterGoal = () => {
     const parsed = parseInt(goalInput);
-    if (!isNaN(parsed) && parsed > 0) {
+    if (!isNaN(parsed) && parsed > 0 && parsed <= 20) {
       useHealthStore.setState((state) => {
-        if (state.metrics) {
-          return { metrics: { ...state.metrics, water_goal: parsed } };
-        }
-        return state;
+        const targetDate = selectedDate || state.metrics.date;
+        const currentMetrics = state.dailyMetrics?.[targetDate] || state.metrics;
+        const updated = { ...currentMetrics, water_goal: parsed };
+        return {
+          metrics: updated,
+          dailyMetrics: {
+            ...(state.dailyMetrics || {}),
+            [targetDate]: updated,
+          },
+        };
       });
       setIsEditingGoal(false);
     } else {
-      Alert.alert('Invalid Input', 'Please enter a valid number of glasses.');
+      Alert.alert('Invalid Goal', 'Please enter a daily water goal between 1 and 20 glasses.');
     }
   };
 
@@ -277,6 +285,12 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
   };
 
   const updateWaterCount = (calculatedAmount: number) => {
+    const current = glasses;
+    if (calculatedAmount > 0 && current >= 20) {
+      Alert.alert('Maximum Limit Reached', 'You can track up to a maximum of 20 glasses of water per day.');
+      return;
+    }
+    if (calculatedAmount < 0 && current <= 0) return;
     useHealthStore.getState().updateWater(calculatedAmount, selectedDate);
   };
 
@@ -428,7 +442,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             <Text style={[styles.summaryValue, { color: '#1E293B' }]}>{glasses} <Text style={{ fontSize: 13, color: '#94A3B8', fontWeight: '500' }}>/ {waterGoal}</Text></Text>
             <Text style={styles.summarySubLabel}>Glasses</Text>
             <View style={styles.waterMiniGlassesRow}>
-              {Array.from({ length: Math.max(waterGoal, glasses) }).map((_, i) => (
+              {Array.from({ length: Math.min(20, Math.max(waterGoal, glasses)) }).map((_, i) => (
                 <Image
                   key={i}
                   source={i < glasses ? DASHBOARD_IMAGES.waterglass : DASHBOARD_IMAGES.emptywaterglass}
@@ -677,21 +691,33 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           </View>
 
           <View style={styles.waterBoxAdjustmentRow}>
-            <TouchableOpacity style={styles.waterControlOpBtn} onPress={() => updateWaterCount(-1)}>
+            <TouchableOpacity 
+              style={[styles.waterControlOpBtn, glasses <= 0 && { opacity: 0.4 }]} 
+              onPress={() => updateWaterCount(-1)}
+              disabled={glasses <= 0}
+            >
               <Icon name="minus" size={14} color="#FFF" />
             </TouchableOpacity>
 
             <View style={{ alignItems: 'center', minWidth: 50 }}>
               <Text style={styles.waterMainDisplayDigit}>{glasses}</Text>
-              <Text style={styles.waterMainDisplaySubText}>Glasses</Text>
+              <Text style={styles.waterMainDisplaySubText}>/ 20 Max</Text>
             </View>
 
-            <TouchableOpacity style={[styles.waterControlOpBtn, { backgroundColor: '#00B4D8' }]} onPress={() => updateWaterCount(1)}>
+            <TouchableOpacity 
+              style={[
+                styles.waterControlOpBtn, 
+                { backgroundColor: '#00B4D8' }, 
+                glasses >= 20 && { opacity: 0.4 }
+              ]} 
+              onPress={() => updateWaterCount(1)}
+              disabled={glasses >= 20}
+            >
               <Icon name="plus" size={14} color="#FFF" />
             </TouchableOpacity>
 
             <View style={styles.visualGlassesRowDisplay}>
-              {Array.from({ length: Math.max(waterGoal, glasses) }).map((_, idx) => (
+              {Array.from({ length: Math.min(20, Math.max(waterGoal, glasses)) }).map((_, idx) => (
                 <Image
                   key={idx}
                   source={idx < glasses ? DASHBOARD_IMAGES.waterglass : DASHBOARD_IMAGES.emptywaterglass}

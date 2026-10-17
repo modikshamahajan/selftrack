@@ -272,7 +272,7 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
 
                 <TouchableOpacity
                   style={[styles.biometricBtn, { marginTop: 12, borderColor: Colors.borderLight, backgroundColor: Colors.backgroundGray }]}
-                  onPress={() => navigation.navigate('AdminLogin')}
+                  onPress={() => navigation.navigate('AdminDashboard')}
                   activeOpacity={0.8}
                 >
                   <View style={[styles.biometricIcon, { backgroundColor: Colors.borderLight }]}>

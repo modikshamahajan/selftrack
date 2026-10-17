@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import { useAuthStore } from './useAuthStore';
 
 export interface Comment {
   id: string;
@@ -47,6 +48,7 @@ interface SocialState {
   commentPost: (postId: string, text: string, userName: string) => Promise<void>;
   addStory: (text: string, userName: string, imageUrl?: string) => void;
   likeStory: (storyId: string) => void;
+  deleteStory: (storyId: string) => void;
 }
 
 export const useSocialStore = create<SocialState>()(
@@ -129,10 +131,12 @@ export const useSocialStore = create<SocialState>()(
   },
 
   createPost: async (content: string, achievement?: string, imageUrl?: string) => {
+    const authUser = useAuthStore.getState().user;
+    const authorName = authUser?.name || 'Explorer';
     const localPost: FeedPost = {
       id: 'post_' + Date.now(),
-      user: 'You (Explorer)',
-      avatar: '',
+      user: authorName,
+      avatar: authUser?.avatar_url || '',
       time: 'Just now',
       content,
       hasImage: !!imageUrl,
@@ -263,6 +267,11 @@ export const useSocialStore = create<SocialState>()(
       stories: state.stories.map(s => 
         s.id === storyId ? { ...s, isLiked: !s.isLiked } : s
       )
+    }));
+  },
+  deleteStory: (storyId: string) => {
+    set((state) => ({
+      stories: state.stories.filter((s) => s.id !== storyId),
     }));
   }
     }),

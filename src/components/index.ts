@@ -11,3 +11,5 @@ export { default as AIAssistantWidget } from './AIAssistantWidget';
 export { default as MoodSelector } from './MoodSelector';
 export { default as ChartCard } from './ChartCard';
 export { default as Header } from './Header';
+export { default as CreateEditEventModal } from './CreateEditEventModal';
+export { default as CelebrationModal } from './CelebrationModal';

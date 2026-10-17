@@ -22,6 +22,8 @@ class User(Base):
     streak_count = Column(Integer, default=0)
     interests = Column(Text, default="[]")  # JSON encoded list of strings
     goals = Column(Text, default="[]")      # JSON encoded list of strings
+    platform = Column(String(50), default="unknown")
+    last_active_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -43,9 +45,9 @@ class UserSettings(Base):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     
     # AI & Model Preferences
-    ai_mode = Column(String(50), default="local_ollama")  # local_ollama | gemini | openai | byok
-    ai_model_name = Column(String(100), default="llama3.2:1b")
-    ollama_endpoint = Column(String(255), default="http://localhost:11434")
+    ai_mode = Column(String(50), default="gemini")  # gemini | openai | byok
+    ai_model_name = Column(String(100), default="gemini-2.5-flash")
+    ollama_endpoint = Column(String(255), nullable=True, default="")
     custom_api_key = Column(String(255), default="")
     ai_suggestions = Column(Boolean, default=True)
     daily_summary = Column(Boolean, default=True)
@@ -258,4 +260,5 @@ class AppDownload(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     device_id = Column(String(100), unique=True, index=True, nullable=False)
     platform = Column(String(50), nullable=False)  # ios, android, web
+    app_version = Column(String(50), default="1.0.0")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

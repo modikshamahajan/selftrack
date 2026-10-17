@@ -107,6 +107,14 @@ export const syncDeviceNotifications = async (): Promise<void> => {
         }
       }
     }
+
+    // Sync Special Event Notifications (Birthdays, Anniversaries, Meetings, Special Occasions)
+    try {
+      const { syncAllSpecialEventNotifications } = await import('./specialEvents');
+      await syncAllSpecialEventNotifications();
+    } catch {
+      // Ignored if special events sync fails
+    }
   } catch {
     // Catch-all prevents uncaught notification errors from surfacing to the user
   }
@@ -148,6 +156,14 @@ export const triggerDailyReminderCheck = async (): Promise<void> => {
           }));
         }
       }
+    }
+
+    // Check upcoming special events (birthdays, anniversaries, meetings, occasions)
+    try {
+      const { checkAndCreateInAppEventAlerts } = await import('./specialEvents');
+      await checkAndCreateInAppEventAlerts();
+    } catch {
+      // Ignored if in-app alerts check fails
     }
   } catch {
     // Ignore reminder sync error on startup

@@ -13,6 +13,7 @@ import Card from '../components/Card';
 import ProgressRing from '../components/ProgressRing';
 import Header from '../components/Header';
 import FloatingActionButton from '../components/FloatingActionButton';
+import { RoutineRunnerModal, RoutineStep } from '../components/RoutineRunnerModal';
 
 interface Habit {
   id: string;
@@ -116,7 +117,10 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
   }, [weekOffset]);
 
   const getDateKey = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   };
 
   const getDayCompletionStats = (
@@ -224,8 +228,77 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
   const canGoBack = navigation.canGoBack();
   const isTab = route?.name === 'Habits';
 
+  // Habit Stacking Routines State
+  const [activeRoutine, setActiveRoutine] = useState<'morning' | 'evening' | null>(null);
+
+  const MORNING_ROUTINE_STEPS: RoutineStep[] = [
+    {
+      id: 'step-water',
+      title: 'Hydrate & Awaken',
+      subtitle: 'Drink a tall glass of fresh water (500ml) to awaken metabolism and clarity.',
+      icon: 'droplet',
+      color: '#00B4D8',
+    },
+    {
+      id: 'step-movement',
+      title: 'Light Body Activation',
+      subtitle: 'Do 5 minutes of gentle morning stretching, yoga, or energizing movement.',
+      icon: 'activity',
+      color: '#2ECC71',
+    },
+    {
+      id: 'step-intentions',
+      title: 'Set Top Intentions',
+      subtitle: 'Define your #1 priority goal for today and mentally prime yourself for flow.',
+      icon: 'sun',
+      color: '#F59E0B',
+    },
+  ];
+
+  const EVENING_ROUTINE_STEPS: RoutineStep[] = [
+    {
+      id: 'step-reflect',
+      title: 'Mindful Journal Log',
+      subtitle: 'Reflect on 1 win and 1 thing you are grateful for today.',
+      icon: 'book',
+      color: '#6C5CE7',
+    },
+    {
+      id: 'step-breathe',
+      title: '1-Min Box Breathing',
+      subtitle: 'Lower heart rate and dissolve daily stress with 4 calm Pranayama breath cycles.',
+      icon: 'wind',
+      color: '#38BDF8',
+    },
+    {
+      id: 'step-sunset',
+      title: 'Digital Sunset',
+      subtitle: 'Dim the room lights, plug phone away from bed, and prepare for deep restorative sleep.',
+      icon: 'moon',
+      color: '#9B59B6',
+    },
+  ];
+
+  const handleStepCompleteInRoutine = (stepId: string) => {
+    const selectedDate = weekDates[selectedDayIndex];
+    if (!selectedDate) return;
+    const dateKey = getDateKey(selectedDate);
+
+    const matchingHabit = habits.find((h) => {
+      const name = h.name.toLowerCase();
+      if (stepId.includes('water') && name.includes('water')) return true;
+      if (stepId.includes('movement') && (name.includes('stretch') || name.includes('walk') || name.includes('workout') || name.includes('exercise'))) return true;
+      if (stepId.includes('reflect') && (name.includes('journal') || name.includes('read') || name.includes('reflect'))) return true;
+      return false;
+    });
+
+    if (matchingHabit && !matchingHabit.completedDays?.[dateKey]) {
+      storeToggleHabit(matchingHabit.id, dateKey);
+    }
+  };
+
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: bgColor }]}>
       {/* TOP LIGHT COLOR HERO PANEL (Warm Sunrise & Amber) */}
       <View style={styles.heroWrapper}>
         <LinearGradient
@@ -357,6 +430,61 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
           </View>
         </View>
 
+        {/* Habit Stacking Routines Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Habit Stacking Flows</Text>
+            <View style={styles.routineBadge}>
+              <Text style={styles.routineBadgeText}>+50 XP RITUAL</Text>
+            </View>
+          </View>
+          <View style={styles.routinesRow}>
+            <TouchableOpacity
+              style={styles.routineCard}
+              activeOpacity={0.8}
+              onPress={() => setActiveRoutine('morning')}
+            >
+              <LinearGradient
+                colors={['#FFFBEB', '#FEF3C7']}
+                style={styles.routineCardGradient}
+              >
+                <View style={styles.routineIconCircle}>
+                  <Text style={styles.routineEmoji}>🌅</Text>
+                </View>
+                <View style={styles.routineContent}>
+                  <Text style={styles.routineTitle}>Morning Kickstart</Text>
+                  <Text style={styles.routineSubtitle}>3 Steps • Hydrate, Move, Focus</Text>
+                </View>
+                <View style={[styles.routineActionBtn, { backgroundColor: '#F59E0B' }]}>
+                  <Icon name="play" size={14} color="#FFF" />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.routineCard}
+              activeOpacity={0.8}
+              onPress={() => setActiveRoutine('evening')}
+            >
+              <LinearGradient
+                colors={['#EEF2FF', '#E0E7FF']}
+                style={styles.routineCardGradient}
+              >
+                <View style={styles.routineIconCircle}>
+                  <Text style={styles.routineEmoji}>🌙</Text>
+                </View>
+                <View style={styles.routineContent}>
+                  <Text style={styles.routineTitle}>Evening Wind-down</Text>
+                  <Text style={styles.routineSubtitle}>3 Steps • Reflect, Breathe, Rest</Text>
+                </View>
+                <View style={[styles.routineActionBtn, { backgroundColor: '#6366F1' }]}>
+                  <Icon name="play" size={14} color="#FFF" />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Habits List */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
@@ -423,6 +551,16 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
 
       {/* PopupModal removed. Create/Edit now handled in CreateEditHabitScreen */}
       <FloatingActionButton icon="plus" onPress={openAddHabitScreen} gradient style={{ bottom: 24 }} />
+
+      {/* Habit Stacking Sequential Runner Modal */}
+      <RoutineRunnerModal
+        visible={Boolean(activeRoutine)}
+        routineTitle={activeRoutine === 'morning' ? 'Morning Kickstart Ritual' : 'Evening Wind-Down Ritual'}
+        routineType={activeRoutine || 'morning'}
+        steps={activeRoutine === 'morning' ? MORNING_ROUTINE_STEPS : EVENING_ROUTINE_STEPS}
+        onClose={() => setActiveRoutine(null)}
+        onStepComplete={handleStepCompleteInRoutine}
+      />
     </SafeAreaView>
   );
 };
@@ -624,6 +762,73 @@ const styles = StyleSheet.create({
   colorList: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
   colorChoice: { width: 50, height: 50, borderRadius: BorderRadius.lg, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.border },
   colorChoiceActive: { borderColor: Colors.secondary, borderWidth: 3 },
+
+  // HABIT STACKING ROUTINES
+  routineBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  routineBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.5,
+  },
+  routinesRow: {
+    gap: 10,
+    marginTop: 10,
+  },
+  routineCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadow.sm,
+  },
+  routineCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  routineIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.sm,
+  },
+  routineEmoji: {
+    fontSize: 22,
+  },
+  routineContent: {
+    flex: 1,
+  },
+  routineTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  routineSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  routineActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.sm,
+  },
 });
 
-export default HabitTrackerScreen; 
+export default HabitTrackerScreen;

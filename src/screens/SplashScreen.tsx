@@ -55,7 +55,7 @@ const CenterLeaves: React.FC = () => {
       {/* Back leaf */}
       <G transform="rotate(-20 54 56) translate(8 4)">
         <Path d="M46 82 C10 66, 8 18, 46 4 C84 18, 82 66, 46 82Z" fill="url(#lb)" />
-        <Path d="M46 4 L46 82"        stroke="#fff" strokeWidth={1.4} strokeLinecap="round" opacity={0.5}  />
+        <Path d="M46 4 L46 82" stroke="#fff" strokeWidth={1.4} strokeLinecap="round" opacity={0.5} />
         <Path d="M46 20 Q33 32, 24 40" stroke="#fff" strokeWidth={0.9} strokeLinecap="round" opacity={0.38} />
         <Path d="M46 36 Q32 47, 22 55" stroke="#fff" strokeWidth={0.9} strokeLinecap="round" opacity={0.38} />
         <Path d="M46 20 Q59 32, 68 40" stroke="#fff" strokeWidth={0.9} strokeLinecap="round" opacity={0.38} />
@@ -64,7 +64,7 @@ const CenterLeaves: React.FC = () => {
       {/* Front leaf */}
       <G transform="rotate(12 54 56) translate(-4 6)">
         <Path d="M54 80 C20 64, 18 20, 54 6 C88 20, 86 64, 54 80Z" fill="url(#lf)" />
-        <Path d="M54 6 L54 80"        stroke="#fff" strokeWidth={1.4} strokeLinecap="round" opacity={0.5}  />
+        <Path d="M54 6 L54 80" stroke="#fff" strokeWidth={1.4} strokeLinecap="round" opacity={0.5} />
         <Path d="M54 22 Q41 34, 32 42" stroke="#fff" strokeWidth={0.9} strokeLinecap="round" opacity={0.38} />
         <Path d="M54 38 Q40 49, 30 57" stroke="#fff" strokeWidth={0.9} strokeLinecap="round" opacity={0.38} />
         <Path d="M54 22 Q67 34, 76 42" stroke="#fff" strokeWidth={0.9} strokeLinecap="round" opacity={0.38} />
@@ -93,7 +93,7 @@ export const DecorLeaf: React.FC = () => {
         </SvgLinearGradient>
       </Defs>
       <Path d="M44 90 C12 72, 10 20, 44 4 C78 20, 76 72, 44 90Z" fill="url(#dm)" />
-      <Path d="M44 4 L44 90"        stroke="#fff" strokeWidth={1.6} strokeLinecap="round" opacity={0.48} />
+      <Path d="M44 4 L44 90" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" opacity={0.48} />
       <Path d="M44 22 Q30 36, 20 45" stroke="#fff" strokeWidth={1.1} strokeLinecap="round" opacity={0.38} />
       <Path d="M44 42 Q29 53, 18 62" stroke="#fff" strokeWidth={1.1} strokeLinecap="round" opacity={0.38} />
       <Path d="M44 22 Q58 36, 68 45" stroke="#fff" strokeWidth={1.1} strokeLinecap="round" opacity={0.38} />
@@ -139,12 +139,12 @@ const TopRightBlob: React.FC = () => {
   return (
     <View style={{
       position: 'absolute',
-      top:   -(bh * 0.42),   // push ~42% above screen top
+      top: -(bh * 0.42),   // push ~42% above screen top
       right: -(bw * 0.12),   // push ~12% off right edge
-      width:  bw,
+      width: bw,
       height: bh,
       backgroundColor: '#FAD96B',
-      borderRadius:    bw,   // full ellipse
+      borderRadius: bw,   // full ellipse
       opacity: 0.60,
     }} />
   );
@@ -157,12 +157,12 @@ const TopLeftBlob: React.FC = () => {
   return (
     <View style={{
       position: 'absolute',
-      top:  -(bh * 0.50),    // half above screen
+      top: -(bh * 0.50),    // half above screen
       left: -(bw * 0.18),    // slightly off left edge
-      width:  bw,
+      width: bw,
       height: bh,
       backgroundColor: '#FAD96B',
-      borderRadius:    bw,
+      borderRadius: bw,
       opacity: 0.55,
     }} />
   );
@@ -175,12 +175,12 @@ const LeftMidBlob: React.FC = () => {
   return (
     <View style={{
       position: 'absolute',
-      top:  SH * 0.355,
+      top: SH * 0.355,
       left: -(bw * 0.42),    // half-hidden behind left edge
-      width:  bw,
+      width: bw,
       height: bh,
       backgroundColor: '#F8C93E',
-      borderRadius:    bw,
+      borderRadius: bw,
       opacity: 0.50,
     }} />
   );
@@ -220,10 +220,10 @@ type Nav = StackNavigationProp<RootStackParamList, 'Splash'>;
 interface Props { navigation: Nav; }
 
 const SplashScreen: React.FC<Props> = ({ navigation }) => {
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.88)).current;
-  const tagAnim   = useRef(new Animated.Value(0)).current;
-  const barAnim   = useRef(new Animated.Value(0)).current;
+  const tagAnim = useRef(new Animated.Value(0)).current;
+  const barAnim = useRef(new Animated.Value(0)).current;
 
   // Dynamic progress value (1–100).  Replace this with your real loader logic.
   const [progress, setProgress] = useState(0);
@@ -231,7 +231,7 @@ const SplashScreen: React.FC<Props> = ({ navigation }) => {
   useEffect(() => {
     // Entrance animations
     Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
       Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 38, useNativeDriver: true }),
     ]).start();
 
@@ -286,14 +286,14 @@ const SplashScreen: React.FC<Props> = ({ navigation }) => {
   }, []);
 
   const barFillWidth = barAnim.interpolate({
-    inputRange:  [0, 1],
+    inputRange: [0, 1],
     outputRange: ['0%', '100%'],
   });
 
   // Decorative leaf: right-aligned, sitting just above the bottom wave
-  const waveH        = SH * 0.17;
-  const leafBottom   = waveH + sc(8);   // just above wave top
-  const trackWidth   = SW * (IS_TABLET ? 0.50 : 0.58);
+  const waveH = SH * 0.17;
+  const leafBottom = waveH + sc(8);   // just above wave top
+  const trackWidth = SW * (IS_TABLET ? 0.50 : 0.58);
 
   return (
     <View style={styles.root}>
@@ -306,7 +306,7 @@ const SplashScreen: React.FC<Props> = ({ navigation }) => {
       <BottomWave />
 
       {/* ── Logo + name, vertically centred ── */}
-      <TouchableWithoutFeedback onLongPress={() => navigation.navigate('AdminLogin')}>
+      <TouchableWithoutFeedback onLongPress={() => navigation.navigate('AdminDashboard')}>
         <Animated.View style={[styles.center, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
           <CenterLeaves />
           <Text style={[styles.appName, { fontSize: fc(34) }]}>SelfTrack</Text>

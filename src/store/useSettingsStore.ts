@@ -4,8 +4,8 @@ import api, { updateApiBaseUrl } from '../services/api';
 export interface AppSettings {
   ai_mode: string;
   ai_model_name: string;
-  ollama_endpoint: string;
   custom_api_key: string;
+  ollama_endpoint?: string;
   ai_suggestions: boolean;
   daily_summary: boolean;
   ai_personality: string;
@@ -25,9 +25,8 @@ export interface AppSettings {
 }
 
 const defaultSettings: AppSettings = {
-  ai_mode: 'local_ollama',
-  ai_model_name: 'llama3.2:1b',
-  ollama_endpoint: 'http://10.0.2.2:11434',
+  ai_mode: 'gemini',
+  ai_model_name: 'gemini-2.5-flash',
   custom_api_key: '',
   ai_suggestions: true,
   daily_summary: true,

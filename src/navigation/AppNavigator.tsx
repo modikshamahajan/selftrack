@@ -26,6 +26,7 @@ import SecurityScreen from '../screens/SecurityScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import AdminLoginScreen from '../screens/AdminLoginScreen';
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
+import FocusTimerScreen from '../screens/FocusTimerScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -35,6 +36,7 @@ export type RootStackParamList = {
   MainTabs: undefined;
   AIChat: undefined;
   HabitTracker: undefined;
+  FocusTimer: undefined;
   Analytics: undefined;
   CreateEditHabit: undefined | { habit?: any };
   Rewards: undefined;
@@ -63,14 +65,20 @@ interface TabIconProps {
 }
 
 const TabIcon: React.FC<TabIconProps> = ({ name, focused }) => (
-  <View style={styles.tabIcon}>
-    <Icon name={name} size={22} color={focused ? Colors.primary : Colors.textTertiary} />
-    {focused ? <View style={styles.activeDot} /> : null}
+  <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
+    <Icon
+      name={name}
+      size={focused ? 20 : 19}
+      color={focused ? Colors.primary : '#94A3B8'}
+    />
   </View>
 );
 
 const BottomTabs: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === 'web';
+  const bottomInset = insets.bottom > 0 ? insets.bottom : 0;
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -78,12 +86,12 @@ const BottomTabs: React.FC = () => {
         tabBarShowLabel: true,
         tabBarLabelStyle: styles.tabLabel,
         tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textTertiary,
+        tabBarInactiveTintColor: '#94A3B8',
         tabBarStyle: [
           styles.tabBar,
           {
-            height: Platform.OS === 'web' ? 60 : 64 + insets.bottom,
-            paddingBottom: Platform.OS === 'web' ? 8 : 8 + insets.bottom,
+            height: isWeb ? 62 : 60 + bottomInset,
+            paddingBottom: isWeb ? 8 : bottomInset > 0 ? bottomInset + 2 : 8,
           }
         ],
       }}>
@@ -122,6 +130,7 @@ const AppNavigator: React.FC = () => (
     <Stack.Screen name="MainTabs" component={BottomTabs} />
     <Stack.Screen name="AIChat" component={AIChatScreen} />
     <Stack.Screen name="HabitTracker" component={HabitTrackerScreen} />
+    <Stack.Screen name="FocusTimer" component={FocusTimerScreen} />
     <Stack.Screen name="Analytics" component={AnalyticsScreen} />
     <Stack.Screen name="CreateEditHabit" component={CreateEditHabitScreen} />
     <Stack.Screen name="Rewards" component={RewardsScreen} />
@@ -135,16 +144,33 @@ const AppNavigator: React.FC = () => (
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: Platform.OS === 'web' ? 60 : 64,
-    backgroundColor: Colors.background,
-    borderTopWidth: 0,
-    paddingBottom: Platform.OS === 'web' ? 8 : 8,
-    paddingTop: 8,
-    ...Shadow.md,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 6,
+    elevation: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
   },
-  tabLabel: { fontSize: 11, fontWeight: '500', marginTop: 2 },
-  tabIcon: { alignItems: 'center', justifyContent: 'center' },
-  activeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.primary, marginTop: 4 },
+  tabLabel: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    marginTop: 2,
+    letterSpacing: -0.2,
+  },
+  tabIconWrap: {
+    width: 44,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  tabIconWrapActive: {
+    backgroundColor: Colors.primarySoft,
+  },
 });
 
 export default AppNavigator;
