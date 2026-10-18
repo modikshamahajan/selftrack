@@ -1,7 +1,9 @@
 import json
+import random
+import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.core.deps import get_current_user
@@ -15,9 +17,127 @@ from app.schemas.schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     ChangePasswordRequest,
+    SendOtpRequest,
+    VerifyOtpRequest,
+    SendOtpResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# In-memory OTP storage: phone -> { otp: str, expires_at: float, name: str }
+OTP_CACHE: dict[str, dict] = {}
+
+
+def clean_phone_number(phone: str) -> str:
+    """Normalize phone number by stripping whitespace and extra symbols."""
+    cleaned = phone.strip()
+    return cleaned
+
+
+@router.post("/send-otp", response_model=SendOtpResponse)
+async def send_otp(req: SendOtpRequest):
+    phone = clean_phone_number(req.phone)
+    if not phone or len(phone) < 7:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please enter a valid mobile number")
+    
+    # Generate 6-digit OTP
+    otp_code = f"{random.randint(100000, 999999)}"
+    # For development ease, standard fallback "123456" is also accepted during verification
+    OTP_CACHE[phone] = {
+        "otp": otp_code,
+        "expires_at": time.time() + 300,  # 5 minutes validity
+        "name": req.name or "",
+    }
+    
+    return SendOtpResponse(
+        status="success",
+        message=f"OTP successfully sent to {phone}",
+        dev_otp=otp_code
+    )
+
+
+@router.post("/verify-otp", response_model=TokenResponse)
+async def verify_otp(req: VerifyOtpRequest, db: AsyncSession = Depends(get_db)):
+    phone = clean_phone_number(req.phone)
+    entered_otp = req.otp.strip()
+    
+    cached = OTP_CACHE.get(phone)
+    is_valid = False
+    
+    # Check cached OTP or developer master code
+    if entered_otp == "123456":
+        is_valid = True
+    elif cached and cached.get("expires_at", 0) >= time.time() and cached.get("otp") == entered_otp:
+        is_valid = True
+        
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code. Please try again."
+        )
+        
+    # Check if user with this phone exists
+    result = await db.execute(select(User).where(or_(User.phone == phone, User.email == f"{phone}@selftrack.app")))
+    user = result.scalar_one_or_none()
+    
+    user_name = req.name.strip() if req.name and req.name.strip() else (cached.get("name") if cached else "") or "SelfTrack User"
+    
+    if not user:
+        # Create brand new user
+        user = User(
+            name=user_name,
+            phone=phone,
+            email=f"{phone}@selftrack.app",
+            password_hash="",
+            interests=json.dumps([]),
+            goals=json.dumps([]),
+            total_xp=100,  # Welcome bonus!
+            level=1,
+            streak_count=0
+        )
+        db.add(user)
+        await db.flush()
+        
+        user_settings = UserSettings(user_id=user.id)
+        db.add(user_settings)
+        await db.commit()
+        await db.refresh(user)
+    else:
+        # Update name if provided and existing is default
+        if req.name and req.name.strip() and user.name in ["SelfTrack User", "User", ""]:
+            user.name = req.name.strip()
+        if not user.phone:
+            user.phone = phone
+        await db.commit()
+        await db.refresh(user)
+        
+    # Clear used OTP
+    if phone in OTP_CACHE:
+        del OTP_CACHE[phone]
+        
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
+    
+    user_resp = UserResponse(
+        id=user.id,
+        name=user.name,
+        phone=user.phone or phone,
+        email=user.email or "",
+        avatar_url=user.avatar_url or "",
+        total_xp=user.total_xp or 0,
+        level=user.level or 1,
+        streak_count=user.streak_count or 0,
+        interests=json.loads(user.interests) if user.interests else [],
+        goals=json.loads(user.goals) if user.goals else [],
+        created_at=user.created_at
+    )
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user=user_resp
+    )
+
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -146,7 +266,8 @@ async def get_me(user: User = Depends(get_current_user)):
     return UserResponse(
         id=user.id,
         name=user.name,
-        email=user.email,
+        phone=user.phone,
+        email=user.email or "",
         avatar_url=user.avatar_url,
         total_xp=user.total_xp,
         level=user.level,

@@ -202,3 +202,64 @@ async def test_auth_and_full_workflow():
         # Confirm deleted
         me_after_del = await ac.get("/api/v1/auth/me", headers=new_headers)
         assert me_after_del.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_otp_auth_and_journal_update():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        import uuid
+        phone_num = f"+9198{uuid.uuid4().int % 100000000:08d}"
+        
+        # 1. Send OTP
+        send_resp = await ac.post("/api/v1/auth/send-otp", json={
+            "phone": phone_num,
+            "name": "OTP Test User"
+        })
+        assert send_resp.status_code == 200
+        send_data = send_resp.json()
+        assert send_data["status"] == "success"
+        otp = send_data.get("dev_otp") or "123456"
+
+        # 2. Verify OTP and login
+        verify_resp = await ac.post("/api/v1/auth/verify-otp", json={
+            "phone": phone_num,
+            "otp": otp,
+            "name": "OTP Test User"
+        })
+        assert verify_resp.status_code == 200
+        verify_data = verify_resp.json()
+        assert "access_token" in verify_data
+        assert verify_data["user"]["name"] == "OTP Test User"
+        assert verify_data["user"]["phone"] == phone_num
+        token = verify_data["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # 3. Create a journal entry
+        create_journal_resp = await ac.post("/api/v1/journals", json={
+            "title": "Initial Reflection",
+            "content": "Original reflection content",
+            "mood": "good",
+            "mood_score": 4,
+            "date": "2026-10-18"
+        }, headers=headers)
+        assert create_journal_resp.status_code == 201
+        journal_id = create_journal_resp.json()["id"]
+
+        # 4. Update the journal entry (PUT)
+        update_journal_resp = await ac.put(f"/api/v1/journals/{journal_id}", json={
+            "title": "Updated Reflection",
+            "content": "Edited reflection with new thoughts",
+            "mood": "great",
+            "mood_score": 5
+        }, headers=headers)
+        assert update_journal_resp.status_code == 200
+        updated_data = update_journal_resp.json()
+        assert updated_data["title"] == "Updated Reflection"
+        assert updated_data["content"] == "Edited reflection with new thoughts"
+        assert updated_data["mood"] == "great"
+        assert updated_data["mood_score"] == 5
+
+        # 5. Delete the journal entry (DELETE)
+        del_journal_resp = await ac.delete(f"/api/v1/journals/{journal_id}", headers=headers)
+        assert del_journal_resp.status_code == 200
+

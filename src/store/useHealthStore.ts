@@ -43,7 +43,7 @@ interface HealthState {
   deleteFoodLog: (id: string) => Promise<void>;
   fetchTrends: () => Promise<void>;
   updateSleep: (hours: number, quality: number, date?: string) => Promise<void>;
-  addCustomFoodItem: (name: string, cal: number, category: string) => void;
+  addCustomFoodItem: (name: string, cal: number, category: string, image_url?: string) => void;
 }
 
 const createDefaultMetricsForDate = (dateStr: string): HealthMetrics => ({
@@ -323,10 +323,10 @@ export const useHealthStore = create<HealthState>()(
         }
       },
 
-      addCustomFoodItem: (name: string, cal: number, category: string) => {
+      addCustomFoodItem: (name: string, cal: number, category: string, image_url?: string) => {
         set((state) => {
           const db = { ...state.customCalorieDb };
-          db[name] = { calories: cal, serving: '1 portion', color: '#FFF6E8' };
+          db[name] = { calories: cal, serving: '1 portion', color: '#FFF6E8', image_url };
 
           const cats = { ...state.customCategories };
           if (!cats[category]) {

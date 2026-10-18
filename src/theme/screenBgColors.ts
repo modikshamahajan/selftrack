@@ -18,7 +18,6 @@ const screenColorMap: { [key: string]: number } = {
   Splash: 0,
   Onboarding: 0,
   Login: 1,
-  Signup: 2,
 
   // Tab screens (cycle through colors)
   Home: 0,
@@ -35,6 +34,7 @@ const screenColorMap: { [key: string]: number } = {
   Notifications: 1,
   Security: 2,
   Settings: 3,
+  MenstrualCycle: 1,
 };
 
 /**

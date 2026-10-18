@@ -14,8 +14,9 @@ class User(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(100), nullable=False)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    phone = Column(String(50), unique=True, index=True, nullable=True)
+    email = Column(String(255), unique=True, index=True, nullable=True)
+    password_hash = Column(String(255), nullable=True, default="")
     avatar_url = Column(String(500), default="")
     total_xp = Column(Integer, default=0)
     level = Column(Integer, default=1)

@@ -239,30 +239,32 @@ const SplashScreen: React.FC<Props> = ({ navigation }) => {
       Animated.timing(tagAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     }, 350);
 
+    // Start auth check immediately upon mount in parallel with splash animation
+    const authPromise = useAuthStore.getState().initializeAuth();
+
     // ── Simulated loading progress 1 → 100 ──────────────────────────────────
-    // Replace this block with your real async loading tasks and call
-    // setProgress(n) / barAnim.setValue(n / 100) as each task completes.
     let current = 0;
     const interval = setInterval(async () => {
-      current += 2;
-      setProgress(Math.min(current, 100));
+      current += 3;
+      const nextProgress = Math.min(current, 100);
+      setProgress(nextProgress);
       Animated.timing(barAnim, {
-        toValue: Math.min(current / 100, 1),
-        duration: 30,
+        toValue: nextProgress / 100,
+        duration: 18,
         useNativeDriver: false,
       }).start();
+
       if (current >= 100) {
         clearInterval(interval);
-        const isAuth = await useAuthStore.getState().initializeAuth();
-        setTimeout(() => {
-          if (isAuth) {
-            navigation.replace('MainTabs');
-          } else {
-            navigation.replace('Onboarding');
-          }
-        }, 300);
+        // Auth check is already running/finished in parallel - navigate immediately with 0 delay!
+        const isAuth = await authPromise;
+        if (isAuth) {
+          navigation.replace('MainTabs');
+        } else {
+          navigation.replace('Onboarding');
+        }
       }
-    }, 25);
+    }, 18);
 
     // Track app download once
     const trackDownload = async () => {

@@ -40,13 +40,18 @@ const HABIT_CATEGORIES = [
 ] as const;
 type HabitCategoryOption = typeof HABIT_CATEGORIES[number];
 
-import { useHabitStore } from '../store/useHabitStore';
+import { useHabitStore, getLocalTodayDateString } from '../store/useHabitStore';
 
 const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
   const storeHabits = useHabitStore((state) => state.habits);
   const fetchHabits = useHabitStore((state) => state.fetchHabits);
   const storeToggleHabit = useHabitStore((state) => state.toggleHabit);
   const storeDeleteHabit = useHabitStore((state) => state.deleteHabit);
+
+  const completedRoutines = useHabitStore((state) => state.completedRoutines) || {};
+  const todayStr = getLocalTodayDateString();
+  const isMorningDoneToday = completedRoutines['morning'] === todayStr;
+  const isEveningDoneToday = completedRoutines['evening'] === todayStr;
 
   const [animatingHabitId, setAnimatingHabitId] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -441,44 +446,66 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
           <View style={styles.routinesRow}>
             <TouchableOpacity
               style={styles.routineCard}
-              activeOpacity={0.8}
-              onPress={() => setActiveRoutine('morning')}
+              activeOpacity={isMorningDoneToday ? 0.9 : 0.8}
+              onPress={() => {
+                if (isMorningDoneToday) {
+                  Alert.alert(
+                    'Morning Kickstart Completed! ✅',
+                    'You have already completed your Morning Kickstart ritual for today. It will be available again tomorrow morning!'
+                  );
+                  return;
+                }
+                setActiveRoutine('morning');
+              }}
             >
               <LinearGradient
-                colors={['#FFFBEB', '#FEF3C7']}
+                colors={isMorningDoneToday ? ['#F0FDF4', '#DCFCE7'] : ['#FFFBEB', '#FEF3C7']}
                 style={styles.routineCardGradient}
               >
-                <View style={styles.routineIconCircle}>
-                  <Text style={styles.routineEmoji}>🌅</Text>
+                <View style={[styles.routineIconCircle, isMorningDoneToday && { backgroundColor: '#DCFCE7' }]}>
+                  <Text style={styles.routineEmoji}>{isMorningDoneToday ? '✅' : '🌅'}</Text>
                 </View>
                 <View style={styles.routineContent}>
                   <Text style={styles.routineTitle}>Morning Kickstart</Text>
-                  <Text style={styles.routineSubtitle}>3 Steps • Hydrate, Move, Focus</Text>
+                  <Text style={[styles.routineSubtitle, isMorningDoneToday && { color: '#16A34A', fontWeight: '700' }]}>
+                    {isMorningDoneToday ? 'Completed for today 🎉' : '3 Steps • Hydrate, Move, Focus'}
+                  </Text>
                 </View>
-                <View style={[styles.routineActionBtn, { backgroundColor: '#F59E0B' }]}>
-                  <Icon name="play" size={14} color="#FFF" />
+                <View style={[styles.routineActionBtn, { backgroundColor: isMorningDoneToday ? '#16A34A' : '#F59E0B' }]}>
+                  <Icon name={isMorningDoneToday ? 'check' : 'play'} size={14} color="#FFF" />
                 </View>
               </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.routineCard}
-              activeOpacity={0.8}
-              onPress={() => setActiveRoutine('evening')}
+              activeOpacity={isEveningDoneToday ? 0.9 : 0.8}
+              onPress={() => {
+                if (isEveningDoneToday) {
+                  Alert.alert(
+                    'Evening Wind-down Completed! ✅',
+                    'You have already completed your Evening Wind-down ritual for today. It will be available again tomorrow evening!'
+                  );
+                  return;
+                }
+                setActiveRoutine('evening');
+              }}
             >
               <LinearGradient
-                colors={['#EEF2FF', '#E0E7FF']}
+                colors={isEveningDoneToday ? ['#F0FDF4', '#DCFCE7'] : ['#EEF2FF', '#E0E7FF']}
                 style={styles.routineCardGradient}
               >
-                <View style={styles.routineIconCircle}>
-                  <Text style={styles.routineEmoji}>🌙</Text>
+                <View style={[styles.routineIconCircle, isEveningDoneToday && { backgroundColor: '#DCFCE7' }]}>
+                  <Text style={styles.routineEmoji}>{isEveningDoneToday ? '✅' : '🌙'}</Text>
                 </View>
                 <View style={styles.routineContent}>
                   <Text style={styles.routineTitle}>Evening Wind-down</Text>
-                  <Text style={styles.routineSubtitle}>3 Steps • Reflect, Breathe, Rest</Text>
+                  <Text style={[styles.routineSubtitle, isEveningDoneToday && { color: '#16A34A', fontWeight: '700' }]}>
+                    {isEveningDoneToday ? 'Completed for today 🌙' : '3 Steps • Reflect, Breathe, Rest'}
+                  </Text>
                 </View>
-                <View style={[styles.routineActionBtn, { backgroundColor: '#6366F1' }]}>
-                  <Icon name="play" size={14} color="#FFF" />
+                <View style={[styles.routineActionBtn, { backgroundColor: isEveningDoneToday ? '#16A34A' : '#6366F1' }]}>
+                  <Icon name={isEveningDoneToday ? 'check' : 'play'} size={14} color="#FFF" />
                 </View>
               </LinearGradient>
             </TouchableOpacity>

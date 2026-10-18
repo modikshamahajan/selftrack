@@ -11,7 +11,6 @@ import { Shadow } from '../theme/spacing';
 import SplashScreen from '../screens/SplashScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
-import SignupScreen from '../screens/SignupScreen';
 import HomeScreen from '../screens/HomeScreen';
 import AIChatScreen from '../screens/AIChatScreen';
 import JournalScreen from '../screens/JournalScreen';
@@ -27,12 +26,12 @@ import SettingsScreen from '../screens/SettingsScreen';
 import AdminLoginScreen from '../screens/AdminLoginScreen';
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import FocusTimerScreen from '../screens/FocusTimerScreen';
+import MenstrualCycleScreen from '../screens/MenstrualCycleScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
   Onboarding: undefined;
   Login: undefined;
-  Signup: undefined;
   MainTabs: undefined;
   AIChat: undefined;
   HabitTracker: undefined;
@@ -45,6 +44,7 @@ export type RootStackParamList = {
   Settings: undefined;
   AdminLogin: undefined;
   AdminDashboard: undefined;
+  MenstrualCycle: undefined;
 };
 
 export type BottomTabParamList = {
@@ -126,7 +126,6 @@ const AppNavigator: React.FC = () => (
     <Stack.Screen name="Splash" component={SplashScreen} />
     <Stack.Screen name="Onboarding" component={OnboardingScreen} />
     <Stack.Screen name="Login" component={LoginScreen} />
-    <Stack.Screen name="Signup" component={SignupScreen} />
     <Stack.Screen name="MainTabs" component={BottomTabs} />
     <Stack.Screen name="AIChat" component={AIChatScreen} />
     <Stack.Screen name="HabitTracker" component={HabitTrackerScreen} />
@@ -139,6 +138,7 @@ const AppNavigator: React.FC = () => (
     <Stack.Screen name="Settings" component={SettingsScreen} />
     <Stack.Screen name="AdminLogin" component={AdminLoginScreen} />
     <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+    <Stack.Screen name="MenstrualCycle" component={MenstrualCycleScreen} />
   </Stack.Navigator>
 );
 

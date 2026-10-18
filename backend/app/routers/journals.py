@@ -7,7 +7,7 @@ from sqlalchemy import select, and_, desc
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.models import User, JournalEntry
-from app.schemas.schemas import JournalCreate, JournalResponse
+from app.schemas.schemas import JournalCreate, JournalUpdate, JournalResponse
 
 router = APIRouter(prefix="/journals", tags=["Journals & Mood"])
 
@@ -82,6 +82,53 @@ async def create_journal(
         mood=entry.mood,
         mood_score=entry.mood_score,
         images=req.images or [],
+        has_voice=entry.has_voice,
+        voice_url=entry.voice_url or "",
+        created_at=entry.created_at
+    )
+
+
+@router.put("/{entry_id}", response_model=JournalResponse)
+async def update_journal(
+    entry_id: str,
+    req: JournalUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    res = await db.execute(
+        select(JournalEntry).where(and_(JournalEntry.id == entry_id, JournalEntry.user_id == user.id))
+    )
+    entry = res.scalar_one_or_none()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+        
+    if req.title is not None:
+        entry.title = req.title
+    if req.content is not None:
+        entry.content = req.content
+    if req.mood is not None:
+        entry.mood = req.mood
+    if req.mood_score is not None:
+        entry.mood_score = req.mood_score
+    if req.images is not None:
+        entry.images = json.dumps(req.images)
+    if req.has_voice is not None:
+        entry.has_voice = req.has_voice
+    if req.voice_url is not None:
+        entry.voice_url = req.voice_url
+
+    await db.commit()
+    await db.refresh(entry)
+
+    imgs = json.loads(entry.images) if entry.images else []
+    return JournalResponse(
+        id=entry.id,
+        date=entry.date,
+        title=entry.title,
+        content=entry.content,
+        mood=entry.mood,
+        mood_score=entry.mood_score,
+        images=imgs,
         has_voice=entry.has_voice,
         voice_url=entry.voice_url or "",
         created_at=entry.created_at

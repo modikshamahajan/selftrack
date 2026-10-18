@@ -48,6 +48,12 @@ const MENU_ITEMS: MenuItem[] = [
     color: '#8B5CF6',
   },
   {
+    icon: 'heart',
+    label: "Women's Health (Cycle Tracker)",
+    screen: 'MenstrualCycle',
+    color: '#F43F5E',
+  },
+  {
     icon: 'award',
     label: 'Rewards & Badges',
     screen: 'Rewards',

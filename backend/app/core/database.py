@@ -35,7 +35,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Safe migration for new columns if existing SQLite DB
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(50)"))
+        except Exception:
+            pass
         try:
             await conn.execute(text("ALTER TABLE users ADD COLUMN last_active_at DATETIME"))
         except Exception:

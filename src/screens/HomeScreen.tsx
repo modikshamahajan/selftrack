@@ -23,6 +23,7 @@ import { useSpecialEventStore } from '../store/useSpecialEventStore';
 import { useQuestStore } from '../store/useQuestStore';
 import { SpecialEvent, EVENT_TYPE_METAS } from '../types/specialEvents';
 import { getEventCountdownLabel, getNextOccurrenceDate } from '../services/specialEvents';
+import { useMenstrualStore, calculateCycleInfo } from '../store/useMenstrualStore';
 import api from '../services/api';
 
 const { width } = Dimensions.get('window');
@@ -62,6 +63,13 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const utcToday = new Date().toISOString().split('T')[0];
   const todayJournal = journalEntries.find(e => e.date === localToday || e.date === utcToday);
   const todayMood = todayJournal?.mood;
+
+  const menstrualSettings = useMenstrualStore((state) => state.settings);
+  const menstrualLogs = useMenstrualStore((state) => state.dailyLogs);
+  const homeCycleInfo = useMemo(
+    () => calculateCycleInfo(localToday, menstrualSettings, menstrualLogs),
+    [localToday, menstrualSettings, menstrualLogs]
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -530,7 +538,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                       {quest.completed ? (
                         <Icon name="check" size={14} color="#FFF" />
                       ) : (
-                        <Text style={styles.questXpTag}>+{quest.xpReward}XP</Text>
+                        <Text style={styles.questXpTag} numberOfLines={1}>+{quest.xpReward}XP</Text>
                       )}
                     </View>
                   </View>
@@ -686,10 +694,8 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 const habitColor = habit.color || '#4F46E5';
                 const isCompleted = isHabitCompletedToday(habit);
                 return (
-                  <TouchableOpacity
+                  <View
                     key={habit.id}
-                    activeOpacity={0.7}
-                    onPress={() => toggleHabit(habit.id, localToday)}
                     style={[
                       styles.habitRowItem,
                       index === displayHabits.length - 1 ? { borderBottomWidth: 0 } : undefined
@@ -714,7 +720,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                         <View style={styles.habitUncheckedDot} />
                       )}
                     </View>
-                  </TouchableOpacity>
+                  </View>
                 );
               })}
             </Card>
@@ -852,6 +858,44 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           </View>
         </Animated.View>
 
+        {/* WOMEN'S HEALTH - CYCLE STATUS WIDGET */}
+        <Animated.View entering={FadeInDown.delay(520).duration(500)} style={styles.section}>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => navigation.navigate('MenstrualCycle')}
+            style={styles.cycleHomeCard}
+          >
+            <LinearGradient
+              colors={['#FFF1F2', '#FFE4E6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.cycleHomeGradient}
+            >
+              <View style={styles.cycleHomeIconCircle}>
+                <Ionicons name="flower" size={24} color="#E11D48" />
+              </View>
+
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <View style={styles.cycleHomeHeaderRow}>
+                  <Text style={styles.cycleHomeBadge}>WOMEN'S HEALTH 🌸</Text>
+                  <Text style={styles.cycleHomePhaseBadge}>
+                    {homeCycleInfo.badgeEmoji} Day {homeCycleInfo.cycleDay}
+                  </Text>
+                </View>
+
+                <Text style={styles.cycleHomeTitle}>{homeCycleInfo.phaseTitle}</Text>
+                <Text style={styles.cycleHomeSub} numberOfLines={1}>
+                  Next period in {homeCycleInfo.daysUntilNextPeriod} days (~{homeCycleInfo.nextPeriodDate})
+                </Text>
+              </View>
+
+              <View style={styles.cycleHomeArrowCircle}>
+                <Icon name="chevron-right" size={18} color="#BE123C" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+
 
 
         {/* QUICK SHORTCUT ACTIONS */}
@@ -911,6 +955,17 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 <Icon name="bar-chart-2" size={22} color="#FFF" />
               </LinearGradient>
               <Text style={styles.quickLabel}>Analytics</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickTile}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('MenstrualCycle')}
+            >
+              <LinearGradient colors={['#FB7185', '#E11D48']} style={styles.quickIconWrap}>
+                <Ionicons name="flower" size={22} color="#FFF" />
+              </LinearGradient>
+              <Text style={styles.quickLabel}>Cycle</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -1287,38 +1342,38 @@ const styles = StyleSheet.create({
   // QUICK SHORTCUTS
   quickGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
     backgroundColor: '#FFFFFF',
     paddingVertical: 18,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginTop: 12,
     marginBottom: 8,
+    rowGap: 16,
     ...Shadow.sm,
   },
   quickTile: {
     alignItems: 'center',
-    flex: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+    width: '33.33%',
+    paddingVertical: 4,
   },
   quickIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
-    ...Shadow.md,
+    marginBottom: 8,
+    ...Shadow.sm,
   },
   quickLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
-    letterSpacing: 0.2,
+    textAlign: 'center',
   },
   celebrationBannerWrapper: {
     paddingHorizontal: 20,
@@ -1623,18 +1678,24 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   questCheckCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    minWidth: 46,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 6,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   questCheckCircleActive: {
     backgroundColor: '#10B981',
+    minWidth: 26,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    paddingHorizontal: 0,
   },
   questXpTag: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#64748B',
   },
@@ -1706,6 +1767,68 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#64748B',
     flex: 1,
+  },
+
+  /* WOMEN'S HEALTH CYCLE HOME WIDGET */
+  cycleHomeCard: {
+    borderRadius: 22,
+    overflow: 'hidden',
+    marginTop: 4,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    ...Shadow.sm,
+  },
+  cycleHomeGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  cycleHomeIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cycleHomeHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  cycleHomeBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#BE123C',
+    letterSpacing: 0.5,
+  },
+  cycleHomePhaseBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9F1239',
+  },
+  cycleHomeTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#4C0519',
+    marginTop: 1,
+  },
+  cycleHomeSub: {
+    fontSize: 12,
+    color: '#881337',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  cycleHomeArrowCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
 });
 

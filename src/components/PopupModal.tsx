@@ -75,7 +75,7 @@ const PopupModal: React.FC<PopupModalProps> = ({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
-  keyboardAvoidingView: { flex: 1, width: '100%' },
+  keyboardAvoidingView: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' },
   modal: { width: '100%', maxHeight: '85%', backgroundColor: Colors.background, borderRadius: BorderRadius['2xl'], padding: Spacing['2xl'], alignItems: 'center', ...Shadow.xl },
   closeButton: { position: 'absolute', top: Spacing.base, right: Spacing.base, padding: Spacing.xs },
   iconContainer: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: Spacing.base },

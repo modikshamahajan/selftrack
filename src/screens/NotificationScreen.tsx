@@ -10,7 +10,7 @@ import {
   Platform,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
@@ -94,6 +94,7 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
   navigation,
   route,
 }) => {
+  const insets = useSafeAreaInsets();
   const bgColor = getScreenBgColor('Notifications');
   const [activeTab, setActiveTab] = useState<MainTab>(
     route?.params?.initialTab === 'events' ? 'events' : 'inbox'
@@ -235,7 +236,7 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
   };
 
   return (
-    <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
       <Header
         title="Notifications & Events"
         onBack={() => navigation.goBack()}
@@ -408,7 +409,9 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
                     </View>
                     <View style={styles.notifContent}>
                       <View style={styles.notifHeader}>
-                        <Text style={styles.notifTitle}>{notif.title}</Text>
+                        <Text style={styles.notifTitle} numberOfLines={1} ellipsizeMode="tail">
+                          {notif.title}
+                        </Text>
                         <Text style={styles.notifTime}>{notif.time}</Text>
                       </View>
                       <Text style={styles.notifMessage} numberOfLines={2}>
@@ -715,7 +718,7 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
           activeOpacity={1}
           onPress={() => setOptionsEvent(null)}
         >
-          <View style={styles.optionsSheetContainer}>
+          <View style={[styles.optionsSheetContainer, { paddingBottom: Math.max(insets.bottom, 16) + 20 }]}>
             {optionsEvent && (
               <>
                 <View style={styles.optionsSheetHeader}>
@@ -863,7 +866,7 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
       {activeTab === 'events' && (
         <TouchableOpacity
           activeOpacity={0.88}
-          style={styles.fabBtn}
+          style={[styles.fabBtn, { bottom: Math.max(insets.bottom, 16) + 20 }]}
           onPress={() => handleOpenAddModal()}
         >
           <Icon name="plus" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
@@ -1064,14 +1067,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.card,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F3EBE3',
     marginBottom: 10,
-    ...Shadow.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 0,
   },
   notifUnread: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: Colors.primaryLight + '50',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
   },
   notifIcon: {
     width: 42,
@@ -1087,9 +1095,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
+    gap: 8,
   },
-  notifTitle: { ...Typography.body, fontWeight: '600', color: Colors.textPrimary },
-  notifTime: { ...Typography.caption, color: Colors.textTertiary },
+  notifTitle: {
+    ...Typography.body,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    flex: 1,
+    marginRight: 8,
+  },
+  notifTime: {
+    ...Typography.caption,
+    color: Colors.textTertiary,
+    flexShrink: 0,
+    fontSize: 11,
+  },
   notifMessage: { ...Typography.caption, color: Colors.textSecondary, lineHeight: 18 },
   unreadDot: {
     width: 8,

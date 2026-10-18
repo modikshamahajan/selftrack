@@ -22,10 +22,28 @@ class UserProfileUpdate(BaseModel):
     avatar_url: Optional[str] = None
 
 
+class SendOtpRequest(BaseModel):
+    phone: str = Field(..., min_length=7, max_length=20)
+    name: Optional[str] = None
+
+
+class VerifyOtpRequest(BaseModel):
+    phone: str = Field(..., min_length=7, max_length=20)
+    otp: str = Field(..., min_length=4, max_length=10)
+    name: Optional[str] = None
+
+
+class SendOtpResponse(BaseModel):
+    status: str = "success"
+    message: str
+    dev_otp: Optional[str] = None
+
+
 class UserResponse(BaseModel):
     id: str
     name: str
-    email: str
+    phone: Optional[str] = None
+    email: Optional[str] = ""
     avatar_url: str = ""
     total_xp: int = 0
     level: int = 1
@@ -208,6 +226,17 @@ class JournalCreate(BaseModel):
     images: Optional[List[str]] = []
     has_voice: bool = False
     voice_url: str = ""
+
+
+class JournalUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    mood: Optional[str] = None
+    mood_score: Optional[int] = None
+    images: Optional[List[str]] = None
+    has_voice: Optional[bool] = None
+    voice_url: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class JournalResponse(BaseModel):

@@ -27,7 +27,7 @@ import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
 import { getScreenBgColor } from '../theme/screenBgColors';
 import Card from '../components/Card';
 import PopupModal from '../components/PopupModal';
-import { useJournalStore } from '../store/useJournalStore';
+import { useJournalStore, formatLocalDate } from '../store/useJournalStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 
 // Layout Constants
@@ -460,6 +460,13 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(new Date().getMonth());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<number>(new Date().getDate());
 
+  // Edit entry modal state
+  const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editMood, setEditMood] = useState('good');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
   const [activePromptIndex, setActivePromptIndex] = useState(0);
   const baseTextRef = useRef('');
 
@@ -762,11 +769,21 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     fetchEntries();
   }, []);
 
+  // Helper to parse "YYYY-MM-DD" local date string safely without timezone shifts
+  const parseLocalDate = (dateStr: string): Date => {
+    if (!dateStr) return new Date();
+    const parts = dateStr.split('-').map(Number);
+    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+      return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+    }
+    return new Date(dateStr);
+  };
+
   // Sync backend store entries into local view
   useEffect(() => {
     if (storeEntries && storeEntries.length > 0) {
       const mapped: JournalEntry[] = storeEntries.map((item) => {
-        const d = item.date ? new Date(item.date + 'T12:00:00') : new Date();
+        const d = item.date ? parseLocalDate(item.date) : new Date();
         return {
           id: item.id,
           date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
@@ -782,6 +799,62 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       setEntries(mapped);
     }
   }, [storeEntries]);
+
+  const handleOpenEdit = (entry: JournalEntry) => {
+    setEditingEntry(entry);
+    setEditTitle(entry.title);
+    setEditContent(entry.preview);
+    const moodKey = Object.keys(MOOD_EMOJIS).find(k => MOOD_EMOJIS[k] === entry.moodEmoji) || 'good';
+    setEditMood(moodKey);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingEntry) return;
+    if (!editContent.trim()) {
+      return Alert.alert('Empty Content', 'Journal reflection cannot be empty.');
+    }
+    const currentMoodObj = MOOD_COLOR_PANEL.find(m => m.id === editMood);
+    const updatedEmoji = currentMoodObj?.emoji || '😊';
+
+    setEntries(prev => prev.map(e => e.id === editingEntry.id ? {
+      ...e,
+      title: editTitle.trim() || e.title,
+      preview: editContent.trim(),
+      moodEmoji: updatedEmoji,
+    } : e));
+
+    setIsEditModalOpen(false);
+
+    try {
+      await useJournalStore.getState().updateEntry(editingEntry.id, {
+        title: editTitle.trim() || editingEntry.title,
+        content: editContent.trim(),
+        mood: editMood,
+        mood_score: currentMoodObj ? 4 : 3,
+      });
+    } catch (e) {}
+  };
+
+  const handleDeleteEntry = (entryId: string) => {
+    Alert.alert(
+      'Delete Reflection',
+      'Are you sure you want to delete this journal entry? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setEntries(prev => prev.filter(e => e.id !== entryId));
+            try {
+              await useJournalStore.getState().deleteEntry(entryId);
+            } catch (e) {}
+          },
+        },
+      ]
+    );
+  };
 
   // Compute 7-day week array based on weekOffset
   const activeWeekDates = useMemo(() => {
@@ -842,7 +915,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const calendarDates = getCalendarDates(selectedMonthIndex, currentYear);
 
   const applySelectedDate = () => {
-    const d = new Date(currentYear, selectedMonthIndex, selectedCalendarDate);
+    const d = new Date(currentYear, selectedMonthIndex, selectedCalendarDate, 12, 0, 0);
     setSelectedJournalDate(d);
 
     // Adjust weekOffset to align with selected date
@@ -955,8 +1028,9 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       return Alert.alert("Empty Reflection", "Please write a thought or reflection before saving.");
     }
 
+    const localDateStr = formatLocalDate(selectedJournalDate);
+    const entryDate = parseLocalDate(localDateStr);
     const now = new Date();
-    const entryDate = new Date(selectedJournalDate);
     entryDate.setHours(now.getHours(), now.getMinutes());
     const formattedDate = `${entryDate.toLocaleDateString('en-US', {
       month: 'short',
@@ -993,7 +1067,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       images: selectedImages,
       has_voice: isRecording,
       tags: selectedActivities,
-      date: selectedJournalDate.toISOString().split('T')[0],
+      date: localDateStr,
     }).catch(() => { });
 
     setSegments([]);
@@ -1006,7 +1080,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   };
 
   const selectedDateEntries = entries.filter(
-    entry => entry.entryDate.toDateString() === selectedJournalDate.toDateString(),
+    entry => formatLocalDate(entry.entryDate) === formatLocalDate(selectedJournalDate),
   );
 
   const rotatePrompt = () => {
@@ -1800,11 +1874,27 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                       <Text style={styles.entryTitle}>{entry.title}</Text>
                       <Text style={styles.entryTimestamp}>{entry.date}</Text>
                     </View>
-                    {entry.hasVoice && (
-                      <View style={styles.voiceIndicatorBadge}>
-                        <Icon name="mic" size={12} color="#4F46E5" />
-                      </View>
-                    )}
+                    <View style={styles.entryActionsRow}>
+                      {entry.hasVoice && (
+                        <View style={styles.voiceIndicatorBadge}>
+                          <Icon name="mic" size={12} color="#4F46E5" />
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.entryActionBtn}
+                        onPress={() => handleOpenEdit(entry)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Icon name="edit-2" size={15} color="#6366F1" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.entryActionBtn, styles.entryDeleteBtn]}
+                        onPress={() => handleDeleteEntry(entry.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Icon name="trash-2" size={15} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   <MarkdownRenderer content={entry.preview} style={styles.entryMarkdownBody} />
@@ -1915,6 +2005,58 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 })}
               </View>
             )}
+          </PopupModal>
+
+          {/* EDIT REFLECTION MODAL */}
+          <PopupModal
+            visible={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            title="Edit Reflection"
+            message="Update your reflection title, mood, or thoughts."
+            primaryAction={{ title: 'Save', onPress: handleSaveEdit }}
+            secondaryAction={{ title: 'Cancel', onPress: () => setIsEditModalOpen(false) }}
+          >
+            <View style={styles.editModalContainer}>
+              <Text style={styles.editFieldLabel}>Title</Text>
+              <TextInput
+                style={styles.editTitleInput}
+                value={editTitle}
+                onChangeText={setEditTitle}
+                placeholder="Reflection title"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={styles.editFieldLabel}>Mood</Text>
+              <View style={styles.editMoodContainer}>
+                {MOOD_COLOR_PANEL.map((m) => (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[
+                      styles.editMoodBtn,
+                      editMood === m.id && styles.editMoodBtnActive,
+                    ]}
+                    onPress={() => setEditMood(m.id)}
+                  >
+                    <Text style={{ fontSize: 18 }}>{m.emoji}</Text>
+                    <Text style={[styles.editMoodBtnText, editMood === m.id && styles.editMoodBtnTextActive]}>
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.editFieldLabel}>Reflection</Text>
+              <TextInput
+                style={styles.editContentInput}
+                value={editContent}
+                onChangeText={setEditContent}
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+                placeholder="Write your thoughts..."
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
           </PopupModal>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -2648,6 +2790,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  entryActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  entryActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  entryDeleteBtn: {
+    backgroundColor: '#FEE2E2',
+  },
   entryContentText: { fontSize: 14, color: '#334155', lineHeight: 21 },
   entryActivitiesRow: {
     flexDirection: 'row',
@@ -2669,6 +2827,62 @@ const styles = StyleSheet.create({
   entryImagesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   entryImageThumb: { width: 70, height: 70, borderRadius: 12, backgroundColor: '#F1F5F9' },
 
+  // EDIT MODAL STYLES
+  editModalContainer: { width: '100%', marginVertical: 4 },
+  editFieldLabel: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 6, marginTop: 8 },
+  editTitleInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  editMoodContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 4,
+  },
+  editMoodBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  editMoodBtnActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#6366F1',
+  },
+  editMoodBtnText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  editMoodBtnTextActive: {
+    color: '#4F46E5',
+    fontWeight: '700',
+  },
+  editContentInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0F172A',
+    minHeight: 100,
+  },
+
   // CALENDAR MODAL
   calendarHeaderPill: {
     width: '100%',
@@ -2680,13 +2894,11 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   calendarHeaderPillText: { fontSize: 15, fontWeight: '800', color: '#FFF' },
-  weekdayRow: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  weekdayRow: { width: '100%', flexDirection: 'row', justifyContent: 'center', marginBottom: 8 },
   weekdayLabel: { fontSize: 11, fontWeight: '700', color: '#64748B', width: `${100 / 7}%`, textAlign: 'center' },
-  dateGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  dateGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   dateCell: {
-    flexBasis: '14.2857%',
-    maxWidth: '14.2857%',
-    minWidth: 36,
+    width: `${100 / 7}%`,
     aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2696,7 +2908,7 @@ const styles = StyleSheet.create({
   dateCellSelected: { backgroundColor: '#4F46E5' },
   dateCellText: { fontSize: 14, fontWeight: '600', color: '#1E293B' },
   dateCellTextSelected: { color: '#FFF', fontWeight: '800' },
-  monthGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 8 },
+  monthGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 8 },
   monthItem: {
     width: '30%',
     paddingVertical: 14,

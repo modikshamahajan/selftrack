@@ -17,11 +17,19 @@ export interface JournalItem {
   created_at?: string;
 }
 
+export const formatLocalDate = (d: Date = new Date()): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface JournalState {
   entries: JournalItem[];
   isLoading: boolean;
   fetchEntries: (date?: string) => Promise<void>;
   addEntry: (entry: { title: string; content: string; mood?: string; mood_score?: number; images?: string[]; has_voice?: boolean; tags?: string[]; date?: string }) => Promise<JournalItem>;
+  updateEntry: (id: string, updates: Partial<JournalItem>) => Promise<JournalItem | undefined>;
   deleteEntry: (id: string) => Promise<void>;
 }
 
@@ -30,7 +38,7 @@ const STORAGE_KEY = 'selftrack_journals';
 const DEFAULT_JOURNALS: JournalItem[] = [
   {
     id: 'journal_1',
-    date: new Date().toISOString().split('T')[0],
+    date: formatLocalDate(),
     title: 'Starting SelfTrack Journey! 🚀',
     content: 'Excited to begin tracking my daily habits, fitness, and thoughts in SelfTrack. Taking it one day at a time.',
     mood: 'great',
@@ -119,6 +127,23 @@ export const useJournalStore = create<JournalState>((set, get) => ({
     }
 
     return newEntry;
+  },
+
+  updateEntry: async (id, updates) => {
+    const updated = get().entries.map((e) => (e.id === id ? { ...e, ...updates } : e));
+    set({ entries: updated });
+    await saveToStorage(updated);
+
+    try {
+      const res = await api.put(`/journals/${id}`, updates);
+      if (res.data?.id) {
+        const synced = get().entries.map((e) => (e.id === id ? res.data : e));
+        set({ entries: synced });
+        await saveToStorage(synced);
+        return res.data;
+      }
+    } catch (err) {}
+    return updated.find((e) => e.id === id);
   },
 
   deleteEntry: async (id) => {

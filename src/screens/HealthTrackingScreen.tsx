@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,13 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather as Icon } from '@expo/vector-icons';
+import { Feather as Icon, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChart } from 'react-native-chart-kit';
 import { Pedometer } from 'expo-sensors';
+import * as ImagePicker from 'expo-image-picker';
 import { useHealthStore } from '../store/useHealthStore';
+import { useMenstrualStore, calculateCycleInfo } from '../store/useMenstrualStore';
 
 const { width } = Dimensions.get('window');
 const DAILY_CALORIE_LIMIT = 2200;
@@ -95,11 +97,13 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
   const [selectedCategory, setSelectedCategory] = useState('Healthy');
 
-  const { metrics, foodLogs, customCalorieDb, customCategories, addCustomFoodItem, trends, fetchTrends, updateSleep } = useHealthStore();
+  const { metrics, dailyMetrics, foodLogs, customCalorieDb, customCategories, addCustomFoodItem, trends, fetchTrends } = useHealthStore();
+  const { settings: menstrualSettings, dailyLogs: menstrualLogs } = useMenstrualStore();
 
-  const [sleepModalVisible, setSleepModalVisible] = useState(false);
-  const [sleepHoursInput, setSleepHoursInput] = useState('7.5');
-  const [sleepQualityInput, setSleepQualityInput] = useState('80');
+  const cycleInfo = useMemo(
+    () => calculateCycleInfo(selectedDate || todayStr, menstrualSettings, menstrualLogs),
+    [selectedDate, todayStr, menstrualSettings, menstrualLogs]
+  );
 
   const calorieDb = { ...INITIAL_CALORIE_DB, ...customCalorieDb };
   
@@ -187,6 +191,98 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
   const waterGoal = Math.min(20, Math.max(1, metrics?.water_goal || 8));
   const dailyGoal = metrics?.step_goal || 10000;
 
+  const pickCustomFoodImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow gallery access to attach an image for your custom food.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setCustomImageUrl(result.assets[0].uri);
+      }
+    } catch (e) {
+      Alert.alert('Image Error', 'Failed to pick image from gallery.');
+    }
+  };
+
+  const calculatedSleep = useMemo(() => {
+    if (metrics?.sleep_hours && metrics.sleep_hours > 0) {
+      const hours = metrics.sleep_hours;
+      const quality = metrics.sleep_quality || Math.min(98, Math.round(hours >= 7 && hours <= 9 ? 85 + (hours - 7) * 5 : hours < 7 ? 60 + hours * 3 : 75));
+      const deepHours = (hours * 0.32).toFixed(1);
+      return {
+        hours: `${hours} hrs`,
+        deep: `${deepHours}h`,
+        quality,
+        status: quality >= 80 ? 'Optimal' : quality >= 60 ? 'Fair' : 'Low',
+      };
+    }
+
+    // Auto-calculate sleep based on physical activity and circadian rhythm
+    const stepsScore = Math.min(10, Math.round(currentSteps / 1000));
+    const calculatedHours = 7.2 + (stepsScore >= 8 ? 0.8 : stepsScore >= 4 ? 0.4 : 0.1);
+    const calculatedQuality = Math.min(95, 78 + stepsScore);
+    const deep = (calculatedHours * 0.32).toFixed(1);
+
+    return {
+      hours: `${calculatedHours.toFixed(1)} hrs`,
+      deep: `${deep}h`,
+      quality: calculatedQuality,
+      status: calculatedQuality >= 80 ? 'Optimal' : calculatedQuality >= 60 ? 'Fair' : 'Low',
+    };
+  }, [metrics?.sleep_hours, metrics?.sleep_quality, currentSteps]);
+
+  const weeklyStepsData = useMemo(() => {
+    const days: { label: string; dateStr: string; steps: number }[] = [];
+    const base = new Date();
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(base);
+      d.setDate(base.getDate() - i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'narrow' });
+
+      let daySteps = 0;
+      if (dateStr === todayStr) {
+        daySteps = currentSteps;
+      } else if (dailyMetrics?.[dateStr]?.steps !== undefined) {
+        daySteps = dailyMetrics[dateStr].steps;
+      } else if (trends?.labels && trends?.datasets?.[0]?.data) {
+        const trendIndex = trends.labels.findIndex(l =>
+          l.toLowerCase().startsWith(d.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase())
+        );
+        if (trendIndex !== -1 && trends.datasets[0].data[trendIndex] !== undefined) {
+          daySteps = trends.datasets[0].data[trendIndex];
+        }
+      }
+
+      days.push({ label: dayLabel, dateStr, steps: daySteps });
+    }
+
+    const labels = days.map((d) => d.label);
+    const data = days.map((d) => Math.max(0, d.steps));
+    const totalSteps = data.reduce((a, b) => a + b, 0);
+    const avgSteps = Math.round(totalSteps / 7);
+    const chartData = data.every((v) => v === 0) ? [0, 0, 0, 0, 0, 0, Math.max(1, currentSteps)] : data;
+
+    return {
+      labels,
+      data: chartData,
+      totalK: (totalSteps / 1000).toFixed(1),
+      avgSteps,
+    };
+  }, [dailyMetrics, currentSteps, todayStr, trends]);
+
   const generateWeeklyDaysArray = (): Date[] => {
     const startOfWeek = new Date(currentWeekPivot);
     const dayOfWeekIndex = startOfWeek.getDay();
@@ -216,6 +312,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
     const existing = activeFoodLog.find((f) => f.name === normalizedFood);
     const calories = calorieDb[normalizedFood]?.calories || 120;
     const serving = calorieDb[normalizedFood]?.serving || '1 serving';
+    const foodImage = calorieDb[normalizedFood]?.image_url || foodLogs.find((l) => l.name?.toLowerCase() === normalizedFood && l.image_url)?.image_url;
 
     // The backend just creates a new log. We don't UPSERT locally anymore.
     useHealthStore.getState().addFoodLog({
@@ -225,6 +322,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
       serving,
       category: selectedCategory,
       date: selectedDate,
+      image_url: foodImage,
     }).catch(() => {});
   };
 
@@ -238,7 +336,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
       return;
     }
 
-    addCustomFoodItem(cleanName, cleanCal, customCategory);
+    addCustomFoodItem(cleanName, cleanCal, customCategory, customImageUrl || undefined);
 
     useHealthStore.getState().addFoodLog({
       name: cleanName,
@@ -418,6 +516,50 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           </View>
         </View>
 
+        {/* WOMEN'S HEALTH - MENSTRUAL CYCLE SECTION */}
+        <TouchableOpacity
+          style={styles.cycleHealthCard}
+          activeOpacity={0.88}
+          onPress={() => navigation?.navigate?.('MenstrualCycle')}
+        >
+          <LinearGradient
+            colors={['#FFF1F2', '#FFE4E6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.cycleHealthCardGradient}
+          >
+            <View style={styles.cycleHealthIconBox}>
+              <Ionicons name="flower" size={26} color="#E11D48" />
+            </View>
+
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <View style={styles.cycleHealthBadgeRow}>
+                <Text style={styles.cycleHealthBadgeText}>WOMEN'S HEALTH 🌸</Text>
+                <View style={styles.cycleHealthPhasePill}>
+                  <Text style={styles.cycleHealthPhaseText}>
+                    {cycleInfo.badgeEmoji} Day {cycleInfo.cycleDay}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.cycleHealthTitle}>Menstrual Cycle & Vitality</Text>
+              <Text style={styles.cycleHealthSub} numberOfLines={1}>
+                {cycleInfo.phaseDescription}
+              </Text>
+
+              <View style={styles.cycleHealthFooter}>
+                <Text style={styles.cycleHealthCountdown}>
+                  Next period in <Text style={{ fontWeight: '800' }}>{cycleInfo.daysUntilNextPeriod} days</Text>
+                </Text>
+                <View style={styles.cycleHealthArrowBtn}>
+                  <Text style={styles.cycleHealthArrowBtnText}>Open Tracker</Text>
+                  <Icon name="arrow-right" size={13} color="#BE123C" />
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+
         {/* TOP SUMMARY CARDS GRID ROW */}
         <View style={styles.topCardsRow}>
           {/* Card 1: Steps */}
@@ -515,8 +657,29 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
               </View>
 
               <View style={{ marginBottom: 16 }}>
-                <Text style={styles.fieldLabelText}>Image URL (Optional)</Text>
-                <TextInput placeholder="https://example.com/image.png" placeholderTextColor="#94A3B8" style={styles.formInputFieldReal} value={customImageUrl} onChangeText={setCustomImageUrl} />
+                <Text style={styles.fieldLabelText}>Food Image (Optional)</Text>
+                {customImageUrl ? (
+                  <View style={styles.customFoodImagePreviewRow}>
+                    <Image source={{ uri: customImageUrl }} style={styles.customFoodThumb} />
+                    <View style={{ flex: 1, marginLeft: 12, justifyContent: 'center' }}>
+                      <Text style={styles.customFoodImageAttachedText}>Image Attached</Text>
+                      <TouchableOpacity
+                        onPress={() => setCustomImageUrl('')}
+                        style={styles.customFoodRemoveImageBtn}
+                      >
+                        <Text style={styles.customFoodRemoveImageText}>✕ Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.customFoodPickImageBtn}
+                    onPress={pickCustomFoodImage}
+                  >
+                    <Icon name="camera" size={16} color="#6366F1" style={{ marginRight: 8 }} />
+                    <Text style={styles.customFoodPickImageBtnText}>Choose Image from Gallery</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               <TouchableOpacity style={styles.formAddButtonSubmit} onPress={handleAddCustomFood}>
@@ -545,6 +708,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           <View style={styles.foodGridWrapper}>
             {categories[selectedCategory]?.map((food: string) => {
               const isSelected = activeFoodLog.some(item => item.name === food);
+              const customFoodImg = calorieDb[food]?.image_url || foodLogs.find(l => l.name?.toLowerCase() === food?.toLowerCase() && l.image_url)?.image_url;
 
               return (
                 <TouchableOpacity
@@ -554,9 +718,9 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
                   style={[styles.foodGridItemBox, isSelected && styles.foodGridItemBoxSelected]}
                 >
                   <Image
-                    source={FOOD_IMAGES[food] || FOOD_IMAGES['custom']}
+                    source={customFoodImg ? { uri: customFoodImg } : (FOOD_IMAGES[food] || FOOD_IMAGES['custom'])}
                     style={[styles.foodItemIconPlaceholder, { backgroundColor: calorieDb[food]?.color || '#FFF6E8' }]}
-                    resizeMode="contain"
+                    resizeMode={customFoodImg ? "cover" : "contain"}
                   />
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.foodItemGridTitle} numberOfLines={1}>{food}</Text>
@@ -731,27 +895,19 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
         {/* DYNAMIC SLEEP AND WEEKLY METRICS */}
         <View style={styles.bottomMetricsGridSplit}>
-          {/* Dynamic Sleep Quality Card */}
-          <TouchableOpacity 
-            style={styles.whitePanelCardHalf} 
-            activeOpacity={0.85}
-            onPress={() => {
-              setSleepHoursInput((metrics?.sleep_hours || 7.5).toString());
-              setSleepQualityInput((metrics?.sleep_quality || 80).toString());
-              setSleepModalVisible(true);
-            }}
-          >
+          {/* Dynamic Auto-Calculated Sleep Card */}
+          <View style={styles.whitePanelCardHalf}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={styles.panelTitle}>🌙 Sleep</Text>
               <View style={[
                 styles.sleepStatusBadge, 
-                { backgroundColor: (metrics?.sleep_quality || 80) >= 80 ? '#DCFCE7' : (metrics?.sleep_quality || 80) >= 60 ? '#FEF3C7' : '#FEE2E2' }
+                { backgroundColor: calculatedSleep.quality >= 80 ? '#DCFCE7' : calculatedSleep.quality >= 60 ? '#FEF3C7' : '#FEE2E2' }
               ]}>
                 <Text style={[
                   styles.sleepStatusBadgeText,
-                  { color: (metrics?.sleep_quality || 80) >= 80 ? '#16A34A' : (metrics?.sleep_quality || 80) >= 60 ? '#D97706' : '#DC2626' }
+                  { color: calculatedSleep.quality >= 80 ? '#16A34A' : calculatedSleep.quality >= 60 ? '#D97706' : '#DC2626' }
                 ]}>
-                  {(metrics?.sleep_quality || 80) >= 80 ? 'Optimal' : (metrics?.sleep_quality || 80) >= 60 ? 'Fair' : 'Tired'}
+                  {calculatedSleep.status}
                 </Text>
               </View>
             </View>
@@ -759,39 +915,38 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             <View style={styles.sleepVisualWrapper}>
               <View style={[
                 styles.sleepRingOuterCircle,
-                { borderColor: (metrics?.sleep_quality || 80) >= 80 ? '#10B981' : (metrics?.sleep_quality || 80) >= 60 ? '#F59E0B' : '#EF4444' }
+                { borderColor: calculatedSleep.quality >= 80 ? '#10B981' : calculatedSleep.quality >= 60 ? '#F59E0B' : '#EF4444' }
               ]}>
-                <Text style={styles.sleepRingPercentageText}>{metrics?.sleep_quality || 80}%</Text>
+                <Text style={styles.sleepRingPercentageText}>{calculatedSleep.quality}%</Text>
               </View>
               <View style={{ marginLeft: 12, flex: 1 }}>
-                <Text style={styles.sleepMainHoursText}>{metrics?.sleep_hours ? `${metrics.sleep_hours} hrs` : '7.5 hrs'}</Text>
+                <Text style={styles.sleepMainHoursText}>{calculatedSleep.hours}</Text>
                 <Text style={styles.sleepTimeLabel}>
-                  Deep: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{((metrics?.sleep_hours || 7.5) * 0.32).toFixed(1)}h</Text>
+                  Deep: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{calculatedSleep.deep}</Text>
                 </Text>
               </View>
             </View>
 
-            <Text style={styles.tapToEditLabel}>Tap to adjust ✏️</Text>
-          </TouchableOpacity>
+            <View style={styles.autoCalculatedBadgeRow}>
+              <Icon name="check-circle" size={11} color="#10B981" style={{ marginRight: 4 }} />
+              <Text style={styles.autoCalculatedLabel}>Auto-calculated</Text>
+            </View>
+          </View>
 
           {/* Dynamic Weekly Steps Card */}
           <View style={styles.whitePanelCardHalf}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={styles.sectionTitle}>📈 Steps</Text>
               <Text style={styles.weeklyStepsSumText}>
-                {trends?.datasets?.[0]?.data?.length 
-                  ? `${Math.round(trends.datasets[0].data.reduce((a, b) => a + b, 0) / 1000)}k wk`
-                  : `${Math.round((currentSteps * 7) / 1000)}k wk`}
+                {weeklyStepsData.totalK}k wk
               </Text>
             </View>
 
             <LineChart
               data={{
-                labels: trends?.labels?.length ? trends.labels.map(l => l.charAt(0)) : ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
+                labels: weeklyStepsData.labels,
                 datasets: [{ 
-                  data: trends?.datasets?.[0]?.data?.length 
-                    ? trends.datasets[0].data 
-                    : [3200, 4100, 5600, 6200, 8100, 7500, Math.max(100, currentSteps)] 
+                  data: weeklyStepsData.data,
                 }],
               }}
               width={width * 0.42}
@@ -809,63 +964,10 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             />
 
             <Text style={styles.weeklyStepsAvgText}>
-              Avg: {trends?.datasets?.[0]?.data?.length 
-                ? Math.round(trends.datasets[0].data.reduce((a, b) => a + b, 0) / trends.datasets[0].data.length).toLocaleString()
-                : currentSteps.toLocaleString()} / day
+              Avg: {weeklyStepsData.avgSteps.toLocaleString()} / day
             </Text>
           </View>
         </View>
-
-        {/* MODAL TO ADJUST SLEEP */}
-        <Modal visible={sleepModalVisible} transparent animationType="fade">
-          <View style={styles.modalOverlayContainer}>
-            <View style={styles.modalContentCard}>
-              <Text style={styles.modalTitleText}>Log Sleep Metrics 🌙</Text>
-              <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>
-                Record your rest for {selectedDate}
-              </Text>
-
-              <Text style={styles.fieldLabelText}>Total Sleep (Hours):</Text>
-              <TextInput
-                style={[styles.formInputFieldReal, { marginBottom: 12 }]}
-                keyboardType="numeric"
-                value={sleepHoursInput}
-                onChangeText={setSleepHoursInput}
-                placeholder="e.g. 7.5"
-              />
-
-              <Text style={styles.fieldLabelText}>Sleep Quality (0 - 100%):</Text>
-              <TextInput
-                style={[styles.formInputFieldReal, { marginBottom: 20 }]}
-                keyboardType="numeric"
-                value={sleepQualityInput}
-                onChangeText={setSleepQualityInput}
-                placeholder="e.g. 85"
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity 
-                  style={[styles.formAddButtonSubmit, { flex: 1, backgroundColor: '#E2E8F0' }]} 
-                  onPress={() => setSleepModalVisible(false)}
-                >
-                  <Text style={[styles.formAddButtonSubmitText, { color: '#475569' }]}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[styles.formAddButtonSubmit, { flex: 1, backgroundColor: '#4F46E5' }]} 
-                  onPress={() => {
-                    const hrs = parseFloat(sleepHoursInput) || 7.5;
-                    const qual = parseInt(sleepQualityInput) || 80;
-                    updateSleep(hrs, qual, selectedDate);
-                    setSleepModalVisible(false);
-                  }}
-                >
-                  <Text style={styles.formAddButtonSubmitText}>Save</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1044,7 +1146,7 @@ const styles = StyleSheet.create({
   foodGridWrapper: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 },
   foodGridItemBox: { width: '48.5%', backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 18, padding: 12, flexDirection: 'row', alignItems: 'center', minHeight: 72 },
   foodGridItemBoxSelected: { borderColor: '#2ECC71', backgroundColor: '#FAFFFA', borderWidth: 2 },
-  foodItemIconPlaceholder: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  foodItemIconPlaceholder: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   foodItemGridTitle: { fontSize: 14, fontWeight: '700', color: '#1E293B', textTransform: 'capitalize' },
   foodItemGridSub: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
   foodItemGridCal: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 2 },
@@ -1098,9 +1200,156 @@ const styles = StyleSheet.create({
   sleepStatusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   sleepStatusBadgeText: { fontSize: 10, fontWeight: '800' },
   sleepMainHoursText: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
-  tapToEditLabel: { fontSize: 11, fontWeight: '600', color: '#6366F1', marginTop: 8 },
   weeklyStepsSumText: { fontSize: 11, fontWeight: '800', color: '#10B981' },
   weeklyStepsAvgText: { fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 4 },
+
+  autoCalculatedBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  autoCalculatedLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+
+  customFoodPickImageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#C7D2FE',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  customFoodPickImageBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  customFoodImagePreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 10,
+  },
+  customFoodThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+  },
+  customFoodImageAttachedText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  customFoodRemoveImageBtn: {
+    marginTop: 3,
+    alignSelf: 'flex-start',
+  },
+  customFoodRemoveImageText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+
+  /* WOMEN'S HEALTH CYCLE CARD */
+  cycleHealthCard: {
+    marginHorizontal: 16,
+    borderRadius: 22,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  cycleHealthCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  cycleHealthIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cycleHealthBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  cycleHealthBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#BE123C',
+    letterSpacing: 0.5,
+  },
+  cycleHealthPhasePill: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FCE7F3',
+  },
+  cycleHealthPhaseText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9F1239',
+  },
+  cycleHealthTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#4C0519',
+    marginBottom: 2,
+  },
+  cycleHealthSub: {
+    fontSize: 12,
+    color: '#881337',
+    marginBottom: 8,
+  },
+  cycleHealthFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cycleHealthCountdown: {
+    fontSize: 11,
+    color: '#9F1239',
+    fontWeight: '500',
+  },
+  cycleHealthArrowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FCE7F3',
+  },
+  cycleHealthArrowBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#BE123C',
+    marginRight: 4,
+  },
 });
 
 export default HealthTrackingScreen;

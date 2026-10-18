@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
 import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
@@ -40,6 +41,7 @@ const CreateEditEventModal: React.FC<CreateEditEventModalProps> = ({
   onSave,
   initialEvent,
 }) => {
+  const insets = useSafeAreaInsets();
   const [eventType, setEventType] = useState<SpecialEventType>('birthday');
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
@@ -213,7 +215,7 @@ const CreateEditEventModal: React.FC<CreateEditEventModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalContainer}>
+        <View style={[styles.modalContainer, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}>
           {/* Header */}
           <View style={styles.header}>
             <View>
