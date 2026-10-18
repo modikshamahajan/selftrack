@@ -4,9 +4,11 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.core.deps import get_current_user
+from app.services.sms import dispatch_sms_otp
 from app.models.models import User, UserSettings
 from app.schemas.schemas import (
     UserRegister,
@@ -49,10 +51,17 @@ async def send_otp(req: SendOtpRequest):
         "name": req.name or "",
     }
     
+    # Dispatch real SMS via configured provider (Twilio / Fast2SMS / MSG91)
+    sms_sent, status_msg, provider = await dispatch_sms_otp(phone, otp_code)
+    
+    dev_otp_val = otp_code if settings.SHOW_DEV_OTP_IN_RESPONSE else None
+    
     return SendOtpResponse(
         status="success",
-        message=f"OTP successfully sent to {phone}",
-        dev_otp=otp_code
+        message=f"Verification code sent to {phone}" if sms_sent else f"OTP generated ({status_msg})",
+        dev_otp=dev_otp_val,
+        sms_sent=sms_sent,
+        provider=provider
     )
 
 

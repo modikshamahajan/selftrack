@@ -17,6 +17,11 @@ echo "Using container engine: $CONTAINER_TOOL"
 $CONTAINER_TOOL stop selftrack-server 2>/dev/null || true
 $CONTAINER_TOOL rm selftrack-server 2>/dev/null || true
 
+ENV_FLAG=""
+if [ -f "$DIR/backend/.env" ]; then
+  ENV_FLAG="--env-file $DIR/backend/.env"
+fi
+
 # Start container with persistent SQLite volume and host networking
 echo "Starting selftrack-server on port 5000..."
 $CONTAINER_TOOL run -d \
@@ -24,6 +29,7 @@ $CONTAINER_TOOL run -d \
   --restart unless-stopped \
   --network host \
   -v selftrack_db:/app/data \
+  $ENV_FLAG \
   -e DATABASE_URL=sqlite+aiosqlite:////app/data/selftrack.db \
   localhost/selftrack-backend:latest
 

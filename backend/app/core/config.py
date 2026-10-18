@@ -22,6 +22,23 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     
+    # SMS Cellular Gateway Configuration
+    # Supported: "auto", "twilio", "fast2sms", "msg91", "console"
+    SMS_PROVIDER: str = os.getenv("SMS_PROVIDER", "auto")
+    SHOW_DEV_OTP_IN_RESPONSE: bool = os.getenv("SHOW_DEV_OTP_IN_RESPONSE", "true").lower() in ("true", "1", "yes")
+    
+    # Twilio (Global SMS)
+    TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_FROM_NUMBER: str = os.getenv("TWILIO_FROM_NUMBER", "")
+    
+    # Fast2SMS (India Quick SMS / OTP Route)
+    FAST2SMS_API_KEY: str = os.getenv("FAST2SMS_API_KEY", "")
+    
+    # MSG91 (India / International OTP Service)
+    MSG91_AUTH_KEY: str = os.getenv("MSG91_AUTH_KEY", "")
+    MSG91_TEMPLATE_ID: str = os.getenv("MSG91_TEMPLATE_ID", "")
+    
     CORS_ORIGINS: List[str] = ["*"]
 
     model_config = SettingsConfigDict(

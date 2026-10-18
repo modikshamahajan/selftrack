@@ -37,6 +37,8 @@ class SendOtpResponse(BaseModel):
     status: str = "success"
     message: str
     dev_otp: Optional[str] = None
+    sms_sent: bool = False
+    provider: Optional[str] = None
 
 
 class UserResponse(BaseModel):
