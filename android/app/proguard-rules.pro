@@ -11,4 +11,21 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
-# Add any project specific keep options here:
+# Lottie
+-keep class com.airbnb.lottie.** { *; }
+
+# React Native SVG
+-keep class com.horcrux.svg.** { *; }
+
+# AsyncStorage
+-keep class com.reactnativecommunity.asyncstorage.** { *; }
+
+# Expo Audio, Notifications & Speech Recognition
+-keep class expo.modules.audio.** { *; }
+-keep class expo.modules.notifications.** { *; }
+-keep class expo.modules.speechrecognition.** { *; }
+
+# Keep all native JNI methods
+-keepclasseswithmembers class * {
+    native <methods>;
+}

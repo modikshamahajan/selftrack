@@ -20,7 +20,7 @@ const DEFAULT_REMINDERS: ScheduledReminder[] = [
     message: 'Take a moment to review and complete your habits today! Keep your streak burning 🔥',
     hour: 20,
     minute: 0,
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'reminder_hydration',
@@ -29,7 +29,7 @@ const DEFAULT_REMINDERS: ScheduledReminder[] = [
     message: 'Time for a glass of water! Stay energized and hydrated 💧',
     hour: 14,
     minute: 30,
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'reminder_reflection',
@@ -38,7 +38,7 @@ const DEFAULT_REMINDERS: ScheduledReminder[] = [
     message: 'How was your day? Record a quick reflection in your journal 📖',
     hour: 21,
     minute: 30,
-    enabled: true,
+    enabled: false,
   },
 ];
 

@@ -87,8 +87,8 @@ class Habit(Base):
     streak_target = Column(Integer, default=7)
     current_streak = Column(Integer, default=0)
     best_streak = Column(Integer, default=0)
-    is_archived = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    is_archived = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     user = relationship("User", back_populates="habits")
     logs = relationship("HabitLog", back_populates="habit", cascade="all, delete-orphan")
@@ -117,8 +117,8 @@ class HealthMetric(Base):
     step_goal = Column(Integer, default=10000)
     water_glasses = Column(Integer, default=0)
     water_goal = Column(Integer, default=8)
-    sleep_hours = Column(Float, default=7.5)
-    sleep_quality = Column(Integer, default=80)
+    sleep_hours = Column(Float, default=0.0)
+    sleep_quality = Column(Integer, default=0)
     calories_burned = Column(Integer, default=0)
     distance_km = Column(Float, default=0.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -157,7 +157,7 @@ class JournalEntry(Base):
     images = Column(Text, default="[]")  # JSON list of image strings
     has_voice = Column(Boolean, default=False)
     voice_url = Column(String(500), default="")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     user = relationship("User", back_populates="journal_entries")
 
@@ -189,7 +189,7 @@ class SocialPost(Base):
     __tablename__ = "social_posts"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     user_name = Column(String(100), nullable=False)
     user_avatar = Column(String(50), default="👤")
     content = Column(Text, nullable=False)
@@ -197,7 +197,7 @@ class SocialPost(Base):
     image_url = Column(String(500), default="")
     likes_count = Column(Integer, default=0)
     comments_count = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     comments = relationship("SocialComment", back_populates="post", cascade="all, delete-orphan", order_by="SocialComment.created_at")
 
@@ -210,7 +210,7 @@ class SocialComment(Base):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     user_name = Column(String(100), nullable=False)
     text = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     post = relationship("SocialPost", back_populates="comments")
     user = relationship("User")
@@ -226,8 +226,8 @@ class Notification(Base):
     category = Column(String(50), default="general")
     icon = Column(String(50), default="bell")
     color = Column(String(20), default="#2ECC71")
-    is_read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    is_read = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     user = relationship("User", back_populates="notifications")
 

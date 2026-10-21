@@ -30,8 +30,8 @@ async def get_or_create_metric(db: AsyncSession, user_id: str, date_str: str) ->
             step_goal=10000,
             water_glasses=0,
             water_goal=8,
-            sleep_hours=7.5,
-            sleep_quality=80,
+            sleep_hours=0.0,
+            sleep_quality=0,
             calories_burned=0,
             distance_km=0.0
         )

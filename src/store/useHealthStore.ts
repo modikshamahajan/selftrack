@@ -38,15 +38,18 @@ interface HealthState {
   fetchMetricsByDate: (date?: string) => Promise<void>;
   syncSteps: (steps: number, date?: string) => Promise<void>;
   updateWater: (delta: number, date?: string) => Promise<void>;
+  setWaterGlasses: (count: number, date?: string) => Promise<void>;
   fetchFoodLogs: (date?: string) => Promise<void>;
   addFoodLog: (item: { name: string; qty: number; calories: number; serving?: string; category?: string; date?: string; image_url?: string }) => Promise<void>;
   deleteFoodLog: (id: string) => Promise<void>;
   fetchTrends: () => Promise<void>;
   updateSleep: (hours: number, quality: number, date?: string) => Promise<void>;
   addCustomFoodItem: (name: string, cal: number, category: string, image_url?: string) => void;
+  syncDevicePedometer: () => Promise<void>;
+  resetHealthState: () => void;
 }
 
-const createDefaultMetricsForDate = (dateStr: string): HealthMetrics => ({
+export const createDefaultMetricsForDate = (dateStr: string): HealthMetrics => ({
   date: dateStr,
   steps: 0,
   step_goal: 10000,
@@ -58,7 +61,14 @@ const createDefaultMetricsForDate = (dateStr: string): HealthMetrics => ({
   distance_km: 0.0,
 });
 
-const todayDateStr = new Date().toISOString().split('T')[0];
+export const getLocalTodayDateString = (d: Date = new Date()): string => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const todayDateStr = getLocalTodayDateString();
 
 export const useHealthStore = create<HealthState>()(
   persist(
@@ -74,8 +84,24 @@ export const useHealthStore = create<HealthState>()(
       },
       isLoading: false,
 
+      resetHealthState: () => {
+        const todayStr = getLocalTodayDateString();
+        set({
+          metrics: createDefaultMetricsForDate(todayStr),
+          dailyMetrics: {},
+          foodLogs: [],
+          customCalorieDb: {},
+          customCategories: {},
+          trends: {
+            labels: [],
+            datasets: [{ data: [] }],
+          },
+          isLoading: false,
+        });
+      },
+
       fetchMetricsByDate: async (date?: string) => {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getLocalTodayDateString();
         const targetDate = date || todayStr;
 
         // Immediately set the active metrics for targetDate (either from local store or fresh 0)
@@ -112,7 +138,7 @@ export const useHealthStore = create<HealthState>()(
       },
 
       syncSteps: async (steps: number, date?: string) => {
-        const todayStr = date || new Date().toISOString().split('T')[0];
+        const todayStr = date || getLocalTodayDateString();
         set((state) => {
           const current = state.dailyMetrics?.[todayStr] ||
             (state.metrics?.date === todayStr ? state.metrics : createDefaultMetricsForDate(todayStr));
@@ -152,7 +178,7 @@ export const useHealthStore = create<HealthState>()(
       },
 
       updateWater: async (delta: number, date?: string) => {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getLocalTodayDateString();
         const targetDate = date || get().metrics?.date || todayStr;
         const currentMetrics = get().dailyMetrics?.[targetDate] ||
           (get().metrics?.date === targetDate ? get().metrics : createDefaultMetricsForDate(targetDate));
@@ -207,6 +233,18 @@ export const useHealthStore = create<HealthState>()(
         }
       },
 
+      setWaterGlasses: async (count: number, date?: string) => {
+        const targetDate = date || get().metrics?.date || getLocalTodayDateString();
+        const currentMetrics = get().dailyMetrics?.[targetDate] ||
+          (get().metrics?.date === targetDate ? get().metrics : createDefaultMetricsForDate(targetDate));
+        const current = Math.min(20, Math.max(0, currentMetrics.water_glasses || 0));
+        const target = Math.min(20, Math.max(0, count));
+        const delta = target - current;
+        if (delta !== 0) {
+          await get().updateWater(delta, targetDate);
+        }
+      },
+
       fetchFoodLogs: async (date) => {
         try {
           const url = date ? `/health/food?date=${date}` : '/health/food';
@@ -225,7 +263,7 @@ export const useHealthStore = create<HealthState>()(
       },
 
       addFoodLog: async (item) => {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getLocalTodayDateString();
         const targetDate = item.date || todayStr;
         const tempId = `food-${Date.now()}`;
         const optimisticFood = {
@@ -284,7 +322,7 @@ export const useHealthStore = create<HealthState>()(
       },
 
       updateSleep: async (hours: number, quality: number, date?: string) => {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getLocalTodayDateString();
         const targetDate = date || get().metrics?.date || todayStr;
         const current = get().dailyMetrics?.[targetDate] ||
           (get().metrics?.date === targetDate ? get().metrics : createDefaultMetricsForDate(targetDate));
@@ -337,6 +375,27 @@ export const useHealthStore = create<HealthState>()(
           }
           return { customCalorieDb: db, customCategories: cats };
         });
+      },
+
+      syncDevicePedometer: async () => {
+        try {
+          const { Pedometer } = require('expo-sensors');
+          const available = await Pedometer.isAvailableAsync();
+          if (!available) return;
+          const perm = await Pedometer.getPermissionsAsync();
+          if (!perm.granted) {
+            const req = await Pedometer.requestPermissionsAsync();
+            if (!req.granted) return;
+          }
+          const start = new Date();
+          start.setHours(0, 0, 0, 0);
+          const result = await Pedometer.getStepCountAsync(start, new Date());
+          if (typeof result?.steps === 'number') {
+            await get().syncSteps(result.steps);
+          }
+        } catch (e) {
+          // Graceful fallback if sensor unavailable
+        }
       },
     }),
     {

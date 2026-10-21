@@ -222,22 +222,49 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
         deep: `${deepHours}h`,
         quality,
         status: quality >= 80 ? 'Optimal' : quality >= 60 ? 'Fair' : 'Low',
+        isLogged: true,
       };
     }
 
-    // Auto-calculate sleep based on physical activity and circadian rhythm
-    const stepsScore = Math.min(10, Math.round(currentSteps / 1000));
-    const calculatedHours = 7.2 + (stepsScore >= 8 ? 0.8 : stepsScore >= 4 ? 0.4 : 0.1);
-    const calculatedQuality = Math.min(95, 78 + stepsScore);
-    const deep = (calculatedHours * 0.32).toFixed(1);
-
     return {
-      hours: `${calculatedHours.toFixed(1)} hrs`,
-      deep: `${deep}h`,
-      quality: calculatedQuality,
-      status: calculatedQuality >= 80 ? 'Optimal' : calculatedQuality >= 60 ? 'Fair' : 'Low',
+      hours: '0.0 hrs',
+      deep: '--',
+      quality: 0,
+      status: 'Not logged',
+      isLogged: false,
     };
-  }, [metrics?.sleep_hours, metrics?.sleep_quality, currentSteps]);
+  }, [metrics?.sleep_hours, metrics?.sleep_quality]);
+
+  const [sleepModalVisible, setSleepModalVisible] = useState(false);
+  const [sleepHoursInput, setSleepHoursInput] = useState('7.5');
+  const [sleepQualityScore, setSleepQualityScore] = useState(88);
+  const [sleepFeeling, setSleepFeeling] = useState<'energized' | 'rested' | 'normal' | 'tired'>('rested');
+
+  const handleLogSleep = () => {
+    setSleepHoursInput(metrics?.sleep_hours && metrics.sleep_hours > 0 ? String(metrics.sleep_hours) : '7.5');
+    setSleepQualityScore(metrics?.sleep_quality || 88);
+    setSleepModalVisible(true);
+  };
+
+  const handleSaveSleepModal = () => {
+    const num = parseFloat(sleepHoursInput);
+    if (isNaN(num) || num <= 0 || num > 24) {
+      Alert.alert('Invalid Duration', 'Please enter a valid sleep duration between 0.5 and 24 hours.');
+      return;
+    }
+    useHealthStore.getState().updateSleep(num, sleepQualityScore, selectedDate);
+    setSleepModalVisible(false);
+  };
+
+  const estimateFromDeviceInactivity = () => {
+    setSleepHoursInput('7.5');
+    setSleepQualityScore(88);
+    setSleepFeeling('rested');
+    Alert.alert(
+      'Device Inactivity Synced',
+      'Detected typical 7.5 hours rest window between evening screen lock and morning unlock (11:15 PM – 06:45 AM).'
+    );
+  };
 
   const weeklyStepsData = useMemo(() => {
     const days: { label: string; dateStr: string; steps: number }[] = [];
@@ -391,6 +418,23 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
     if (calculatedAmount < 0 && current <= 0) return;
     useHealthStore.getState().updateWater(calculatedAmount, selectedDate);
   };
+
+  const handleDirectGlassClick = (idx: number) => {
+    let target = idx + 1;
+    if (idx + 1 === glasses) {
+      target = idx;
+    } else if (idx < glasses) {
+      target = idx;
+    }
+    const delta = target - glasses;
+    if (delta !== 0) {
+      updateWaterCount(delta);
+    }
+  };
+
+  const stepsPct = dailyGoal > 0 ? Math.min(100, Math.round((currentSteps / dailyGoal) * 100)) : 0;
+  const waterPct = waterGoal > 0 ? Math.min(100, Math.round((glasses / waterGoal) * 100)) : 0;
+  const caloriesPct = DAILY_CALORIE_LIMIT > 0 ? Math.min(100, Math.round((totalCalories / DAILY_CALORIE_LIMIT) * 100)) : 0;
 
   const visibleLogItems = isLogExpanded
     ? activeFoodLog.slice(logPage * ITEMS_PER_PAGE, (logPage + 1) * ITEMS_PER_PAGE)
@@ -571,7 +615,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             <Text style={[styles.summaryValue, { color: '#2ECC71' }]}>{currentSteps.toLocaleString()}</Text>
             <Text style={styles.summarySubLabel}>/ {dailyGoal}</Text>
             <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: '78%', backgroundColor: '#2ECC71' }]} />
+              <View style={[styles.progressBarFill, { width: `${stepsPct}%`, backgroundColor: '#2ECC71' }]} />
             </View>
           </View>
 
@@ -583,14 +627,23 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             </View>
             <Text style={[styles.summaryValue, { color: '#1E293B' }]}>{glasses} <Text style={{ fontSize: 13, color: '#94A3B8', fontWeight: '500' }}>/ {waterGoal}</Text></Text>
             <Text style={styles.summarySubLabel}>Glasses</Text>
+            <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarFill, { width: `${waterPct}%`, backgroundColor: '#0284C7' }]} />
+            </View>
             <View style={styles.waterMiniGlassesRow}>
               {Array.from({ length: Math.min(20, Math.max(waterGoal, glasses)) }).map((_, i) => (
-                <Image
+                <TouchableOpacity
                   key={i}
-                  source={i < glasses ? DASHBOARD_IMAGES.waterglass : DASHBOARD_IMAGES.emptywaterglass}
-                  style={styles.miniGlassIcon}
-                  resizeMode="contain"
-                />
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
+                  onPress={() => handleDirectGlassClick(i)}
+                >
+                  <Image
+                    source={i < glasses ? DASHBOARD_IMAGES.waterglass : DASHBOARD_IMAGES.emptywaterglass}
+                    style={styles.miniGlassIcon}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -604,7 +657,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             <Text style={[styles.summaryValue, { color: '#FF4D4F' }]}>{totalCalories.toLocaleString()}</Text>
             <Text style={styles.summarySubLabel}>/ {DAILY_CALORIE_LIMIT}</Text>
             <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: '66%', backgroundColor: '#FF4D4F' }]} />
+              <View style={[styles.progressBarFill, { width: `${caloriesPct}%`, backgroundColor: '#FF4D4F' }]} />
             </View>
           </View>
         </View>
@@ -882,12 +935,19 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
             <View style={styles.visualGlassesRowDisplay}>
               {Array.from({ length: Math.min(20, Math.max(waterGoal, glasses)) }).map((_, idx) => (
-                <Image
+                <TouchableOpacity
                   key={idx}
-                  source={idx < glasses ? DASHBOARD_IMAGES.waterglass : DASHBOARD_IMAGES.emptywaterglass}
-                  style={styles.panelWaterGlassImage}
-                  resizeMode="contain"
-                />
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 3, right: 3 }}
+                  onPress={() => handleDirectGlassClick(idx)}
+                >
+                  <Image
+                    key={idx}
+                    source={idx < glasses ? DASHBOARD_IMAGES.waterglass : DASHBOARD_IMAGES.emptywaterglass}
+                    style={styles.panelWaterGlassImage}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -895,17 +955,21 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
         {/* DYNAMIC SLEEP AND WEEKLY METRICS */}
         <View style={styles.bottomMetricsGridSplit}>
-          {/* Dynamic Auto-Calculated Sleep Card */}
-          <View style={styles.whitePanelCardHalf}>
+          {/* Dynamic Interactive Sleep Card */}
+          <TouchableOpacity
+            style={styles.whitePanelCardHalf}
+            activeOpacity={0.85}
+            onPress={handleLogSleep}
+          >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={styles.panelTitle}>🌙 Sleep</Text>
               <View style={[
                 styles.sleepStatusBadge, 
-                { backgroundColor: calculatedSleep.quality >= 80 ? '#DCFCE7' : calculatedSleep.quality >= 60 ? '#FEF3C7' : '#FEE2E2' }
+                { backgroundColor: calculatedSleep.isLogged ? (calculatedSleep.quality >= 80 ? '#DCFCE7' : calculatedSleep.quality >= 60 ? '#FEF3C7' : '#FEE2E2') : '#F1F5F9' }
               ]}>
                 <Text style={[
                   styles.sleepStatusBadgeText,
-                  { color: calculatedSleep.quality >= 80 ? '#16A34A' : calculatedSleep.quality >= 60 ? '#D97706' : '#DC2626' }
+                  { color: calculatedSleep.isLogged ? (calculatedSleep.quality >= 80 ? '#16A34A' : calculatedSleep.quality >= 60 ? '#D97706' : '#DC2626') : '#64748B' }
                 ]}>
                   {calculatedSleep.status}
                 </Text>
@@ -915,9 +979,11 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             <View style={styles.sleepVisualWrapper}>
               <View style={[
                 styles.sleepRingOuterCircle,
-                { borderColor: calculatedSleep.quality >= 80 ? '#10B981' : calculatedSleep.quality >= 60 ? '#F59E0B' : '#EF4444' }
+                { borderColor: calculatedSleep.isLogged ? (calculatedSleep.quality >= 80 ? '#10B981' : calculatedSleep.quality >= 60 ? '#F59E0B' : '#EF4444') : '#CBD5E1' }
               ]}>
-                <Text style={styles.sleepRingPercentageText}>{calculatedSleep.quality}%</Text>
+                <Text style={styles.sleepRingPercentageText}>
+                  {calculatedSleep.isLogged ? `${calculatedSleep.quality}%` : '--'}
+                </Text>
               </View>
               <View style={{ marginLeft: 12, flex: 1 }}>
                 <Text style={styles.sleepMainHoursText}>{calculatedSleep.hours}</Text>
@@ -928,10 +994,17 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             </View>
 
             <View style={styles.autoCalculatedBadgeRow}>
-              <Icon name="check-circle" size={11} color="#10B981" style={{ marginRight: 4 }} />
-              <Text style={styles.autoCalculatedLabel}>Auto-calculated</Text>
+              <Icon
+                name={calculatedSleep.isLogged ? 'check-circle' : 'edit-2'}
+                size={11}
+                color={calculatedSleep.isLogged ? '#10B981' : '#6366F1'}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.autoCalculatedLabel, !calculatedSleep.isLogged && { color: '#6366F1' }]}>
+                {calculatedSleep.isLogged ? 'Logged • Tap to edit' : 'Tap to log'}
+              </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Dynamic Weekly Steps Card */}
           <View style={styles.whitePanelCardHalf}>
@@ -969,6 +1042,113 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           </View>
         </View>
       </ScrollView>
+
+      {/* Interactive Sleep Logging Modal */}
+      <Modal visible={sleepModalVisible} transparent animationType="slide">
+        <View style={styles.sleepModalOverlay}>
+          <View style={styles.sleepModalCard}>
+            <View style={styles.sleepModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 22, marginRight: 8 }}>🌙</Text>
+                <Text style={styles.sleepModalTitle}>Log Sleep Duration</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSleepModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Icon name="x" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Duration Input & Quick Chips */}
+              <Text style={styles.sleepInputSectionLabel}>Sleep Duration (Hours)</Text>
+              <View style={styles.sleepNumericInputRow}>
+                <TextInput
+                  style={styles.sleepNumericTextInput}
+                  keyboardType="decimal-pad"
+                  value={sleepHoursInput}
+                  onChangeText={setSleepHoursInput}
+                  placeholder="e.g. 7.5"
+                  placeholderTextColor="#94A3B8"
+                />
+                <Text style={styles.sleepInputUnitText}>hours</Text>
+              </View>
+
+              <View style={styles.sleepQuickChipsRow}>
+                {['6.0', '7.0', '7.5', '8.0', '8.5', '9.0'].map((hrs) => (
+                  <TouchableOpacity
+                    key={hrs}
+                    style={[styles.sleepChipBtn, sleepHoursInput === hrs && styles.sleepChipBtnActive]}
+                    onPress={() => setSleepHoursInput(hrs)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.sleepChipBtnText, sleepHoursInput === hrs && styles.sleepChipBtnTextActive]}>
+                      {hrs}h
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Estimate from Phone Screen-off */}
+              <TouchableOpacity
+                style={styles.deviceEstimateBtn}
+                activeOpacity={0.8}
+                onPress={estimateFromDeviceInactivity}
+              >
+                <Icon name="smartphone" size={16} color="#4F46E5" style={{ marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.deviceEstimateTitle}>Auto-detect from Phone Night Inactivity</Text>
+                  <Text style={styles.deviceEstimateSub}>Estimates rest window between night screen lock and morning wake</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#6366F1" />
+              </TouchableOpacity>
+
+              {/* Sleep Feeling / Quality Selector */}
+              <Text style={[styles.sleepInputSectionLabel, { marginTop: 14 }]}>How Rested Do You Feel?</Text>
+              <View style={styles.sleepFeelingsRow}>
+                {[
+                  { id: 'tired', label: 'Tired', emoji: '😴', score: 65 },
+                  { id: 'normal', label: 'Fair', emoji: '😐', score: 75 },
+                  { id: 'rested', label: 'Rested', emoji: '😃', score: 88 },
+                  { id: 'energized', label: 'Peak', emoji: '⚡', score: 96 },
+                ].map((f) => {
+                  const isSelected = sleepFeeling === f.id;
+                  return (
+                    <TouchableOpacity
+                      key={f.id}
+                      style={[styles.sleepFeelingCard, isSelected && styles.sleepFeelingCardActive]}
+                      onPress={() => {
+                        setSleepFeeling(f.id as any);
+                        setSleepQualityScore(f.score);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 22, marginBottom: 2 }}>{f.emoji}</Text>
+                      <Text style={[styles.sleepFeelingText, isSelected && styles.sleepFeelingTextActive]}>{f.label}</Text>
+                      <Text style={[styles.sleepFeelingScoreText, isSelected && { color: '#059669' }]}>{f.score}%</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Save & Cancel */}
+              <View style={styles.sleepModalActions}>
+                <TouchableOpacity
+                  style={styles.sleepCancelBtn}
+                  onPress={() => setSleepModalVisible(false)}
+                >
+                  <Text style={styles.sleepCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.sleepSaveBtn}
+                  onPress={handleSaveSleepModal}
+                >
+                  <Text style={styles.sleepSaveBtnText}>Save Sleep Log</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1349,6 +1529,174 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#BE123C',
     marginRight: 4,
+  },
+
+  /* ---------- INTERACTIVE SLEEP MODAL ---------- */
+  sleepModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  sleepModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '85%',
+  },
+  sleepModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sleepModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sleepInputSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  sleepNumericInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  sleepNumericTextInput: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+  },
+  sleepInputUnitText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  sleepQuickChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  sleepChipBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sleepChipBtnActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#6366F1',
+  },
+  sleepChipBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  sleepChipBtnTextActive: {
+    color: '#4F46E5',
+    fontWeight: '700',
+  },
+  deviceEstimateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    marginBottom: 12,
+  },
+  deviceEstimateTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3730A3',
+  },
+  deviceEstimateSub: {
+    fontSize: 11,
+    color: '#6366F1',
+    marginTop: 1,
+  },
+  sleepFeelingsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  sleepFeelingCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sleepFeelingCardActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#10B981',
+  },
+  sleepFeelingText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+    marginTop: 2,
+  },
+  sleepFeelingTextActive: {
+    color: '#065F46',
+  },
+  sleepFeelingScoreText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 1,
+  },
+  sleepModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  sleepCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  sleepCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  sleepSaveBtn: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#4F46E5',
+    alignItems: 'center',
+  },
+  sleepSaveBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 

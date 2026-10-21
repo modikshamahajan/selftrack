@@ -1,0 +1,17 @@
+models:
+  - name: DeepSeek Chat
+    provider: deepseek
+    model: deepseek-chat
+    apiKey: sk-183dc5ae321f4ac8bc20eeea9d2072c4
+    roles:
+      - chat
+      - edit
+      - apply
+      - summarize
+
+# Optional: Set it up for your inline tab-autocomplete as well
+tabAutocompleteModel:
+  name: DeepSeek Coder
+  provider: deepseek
+  model: deepseek-coder
+  apiKey: sk-183dc5ae321f4ac8bc20eeea9d2072c4

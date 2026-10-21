@@ -66,7 +66,17 @@ export const calculateCycleInfo = (
   logs: Record<string, DailySymptomLog> = {}
 ): CycleDayInfo => {
   const diff = getDaysDiff(settings.lastPeriodStart, targetDateStr);
-  const cycleDay = ((diff % settings.cycleLength) + settings.cycleLength) % settings.cycleLength + 1;
+  const todayStr = formatYMD(new Date());
+  const isPastOrToday = targetDateStr <= todayStr;
+  const dayLog = logs[targetDateStr];
+  const hasLoggedPeriod = Boolean(dayLog && dayLog.isPeriod && dayLog.flow !== 'none');
+
+  // Overdue check: past cycle length without a logged period
+  const isOverdue = isPastOrToday && diff >= settings.cycleLength && !hasLoggedPeriod;
+
+  const cycleDay = isOverdue
+    ? diff + 1
+    : ((diff % settings.cycleLength) + settings.cycleLength) % settings.cycleLength + 1;
 
   let phase: CyclePhase = 'follicular';
   let phaseTitle = 'Follicular Phase';
@@ -79,7 +89,15 @@ export const calculateCycleInfo = (
   const fertileStart = Math.max(settings.periodDuration + 1, ovulationPeakDay - 4);
   const fertileEnd = Math.min(settings.cycleLength, ovulationPeakDay + 1);
 
-  if (cycleDay <= settings.periodDuration) {
+  if (isOverdue) {
+    const daysLate = diff - settings.cycleLength + 1;
+    phase = 'luteal';
+    phaseTitle = `Period Late (${daysLate}d)`;
+    phaseDescription = `Expected ${daysLate} day${daysLate > 1 ? 's' : ''} ago • Log your flow if started or track symptoms`;
+    fertilityChance = 'Low';
+    themeColor = '#E11D48';
+    badgeEmoji = '⏳';
+  } else if (cycleDay <= settings.periodDuration) {
     phase = 'menstrual';
     phaseTitle = 'Menstrual Phase';
     phaseDescription = 'Period active • Prioritize warm hydration, rest & iron-rich foods';
@@ -109,18 +127,17 @@ export const calculateCycleInfo = (
     badgeEmoji = '🌱';
   }
 
-  const daysUntilNextPeriod = settings.cycleLength - cycleDay + 1;
+  const daysUntilNextPeriod = isOverdue ? 0 : Math.max(0, settings.cycleLength - cycleDay + 1);
   const targetDateObj = parseYMD(targetDateStr);
   const nextPeriodObj = new Date(targetDateObj);
-  nextPeriodObj.setDate(targetDateObj.getDate() + (daysUntilNextPeriod <= 0 ? settings.cycleLength : daysUntilNextPeriod));
+  nextPeriodObj.setDate(targetDateObj.getDate() + (daysUntilNextPeriod <= 0 && !isOverdue ? settings.cycleLength : daysUntilNextPeriod));
   const nextPeriodDate = formatYMD(nextPeriodObj);
 
-  const dayLog = logs[targetDateStr];
   let isPeriodActive = false;
   if (dayLog && typeof dayLog.isPeriod === 'boolean') {
     isPeriodActive = dayLog.isPeriod && dayLog.flow !== 'none';
   } else {
-    isPeriodActive = phase === 'menstrual';
+    isPeriodActive = !isOverdue && phase === 'menstrual';
   }
 
   return {

@@ -20,6 +20,7 @@ import {
   useMenstrualStore,
   formatYMD,
   parseYMD,
+  getDaysDiff,
   calculateCycleInfo,
   DailySymptomLog,
 } from '../store/useMenstrualStore';
@@ -51,20 +52,6 @@ const SYMPTOM_OPTIONS = [
   { id: 'Cravings', label: 'Food Cravings', emoji: '🍫' },
 ];
 
-const DISCHARGE_OPTIONS = [
-  { id: 'dry', label: 'Dry' },
-  { id: 'sticky', label: 'Sticky' },
-  { id: 'creamy', label: 'Creamy' },
-  { id: 'egg-white', label: 'Egg-white (Fertile)' },
-  { id: 'watery', label: 'Watery' },
-];
-
-const INTIMACY_OPTIONS = [
-  { id: 'protected', label: 'Protected Sex', emoji: '🛡️' },
-  { id: 'unprotected', label: 'Unprotected Sex', emoji: '⚠️' },
-  { id: 'high-libido', label: 'High Libido', emoji: '🔥' },
-  { id: 'pill-taken', label: 'Birth Control Pill', emoji: '💊' },
-];
 
 const FLOW_LEVELS: { id: 'none' | 'spotting' | 'light' | 'medium' | 'heavy'; label: string; icon: string }[] = [
   { id: 'none', label: 'None', icon: '○' },
@@ -162,7 +149,6 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
     date: selectedDate,
     moods: [],
     symptoms: [],
-    sex: [],
     flow: 'none',
     notes: '',
   };
@@ -172,8 +158,6 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
   );
   const [localMoods, setLocalMoods] = useState<string[]>(currentLog.moods || []);
   const [localSymptoms, setLocalSymptoms] = useState<string[]>(currentLog.symptoms || []);
-  const [localDischarge, setLocalDischarge] = useState<string | undefined>(currentLog.discharge);
-  const [localSex, setLocalSex] = useState<string[]>(currentLog.sex || []);
   const [localNotes, setLocalNotes] = useState<string>(currentLog.notes || '');
 
   // Sync local inputs when selectedDate changes
@@ -182,8 +166,6 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
     setLocalFlow(log?.flow || (selectedDayCycle.isPeriodActive ? 'medium' : 'none'));
     setLocalMoods(log?.moods || []);
     setLocalSymptoms(log?.symptoms || []);
-    setLocalDischarge(log?.discharge);
-    setLocalSex(log?.sex || []);
     setLocalNotes(log?.notes || '');
   }, [selectedDate, dailyLogs, selectedDayCycle.isPeriodActive]);
 
@@ -245,11 +227,6 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
     setLocalSymptoms((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   };
 
-  const handleToggleSex = (id: string) => {
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setLocalSex((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
-  };
-
   const handleSaveDailyLog = async () => {
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const isPeriodNow = localFlow !== 'none';
@@ -258,13 +235,13 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
       isPeriod: isPeriodNow,
       moods: localMoods,
       symptoms: localSymptoms,
-      discharge: localDischarge,
-      sex: localSex,
       notes: localNotes.trim(),
     });
 
-    // If marked as period and date was selected, update last period if applicable
-    if (isPeriodNow && selectedDate > settings.lastPeriodStart) {
+    // If marked as period flow, only start a NEW cycle if selectedDate is at least 16 days after the last period start
+    // (a biological cycle cannot restart on day 2, 3, or 4 of an ongoing period)
+    const daysSinceLastStart = settings.lastPeriodStart ? getDaysDiff(settings.lastPeriodStart, selectedDate) : 999;
+    if (isPeriodNow && (!settings.lastPeriodStart || daysSinceLastStart >= 16)) {
       await updateSettings({
         previousPeriodStart: settings.lastPeriodStart,
         lastPeriodStart: selectedDate,
@@ -291,8 +268,11 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
 
   const currentPhaseInsight = PHASE_DETAILS[todayCycle.phase];
 
+  const androidNavPadding = Platform.OS === 'android' ? Math.max(insets.bottom, 28) : insets.bottom;
+  const scrollBottomPadding = androidNavPadding + (Platform.OS === 'android' ? 84 : 40);
+
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       {/* HEADER BAR */}
       <View style={styles.headerBar}>
         <TouchableOpacity
@@ -326,7 +306,7 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
       >
         {/* ===================== HERO CYCLE DIAL CARD ===================== */}
         <LinearGradient
@@ -582,48 +562,7 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
             })}
           </View>
 
-          {/* 4. Vaginal Discharge */}
-          <Text style={styles.groupLabel}>Cervical Fluid / Discharge</Text>
-          <View style={styles.chipsWrap}>
-            {DISCHARGE_OPTIONS.map((dis) => {
-              const active = localDischarge === dis.id;
-              return (
-                <TouchableOpacity
-                  key={dis.id}
-                  style={[styles.chipBox, active && styles.chipBoxActive]}
-                  onPress={() => setLocalDischarge(active ? undefined : dis.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
-                    {dis.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* 5. Intimacy & Contraception */}
-          <Text style={styles.groupLabel}>Sex & Intimacy</Text>
-          <View style={styles.chipsWrap}>
-            {INTIMACY_OPTIONS.map((item) => {
-              const active = localSex.includes(item.id);
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.chipBox, active && styles.chipBoxActive]}
-                  onPress={() => handleToggleSex(item.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.chipEmoji}>{item.emoji}</Text>
-                  <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* 6. Personal Notes */}
+          {/* 4. Personal Notes */}
           <Text style={styles.groupLabel}>Personal Reflections & Symptoms</Text>
           <TextInput
             style={styles.notesInput}
@@ -735,6 +674,9 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
             <Text style={styles.adjustConfigBtnText}>Adjust Cycle Length & Period Parameters</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Generous bottom spacing spacer ensuring complete clearance above Android navigation bar */}
+        <View style={{ height: Platform.OS === 'android' ? 44 : 20 }} />
       </ScrollView>
 
       {/* ===================== SETTINGS & SETUP MODAL ===================== */}
@@ -745,7 +687,17 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
         onRequestClose={() => setSettingsModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                paddingBottom:
+                  Platform.OS === 'android'
+                    ? Math.max(insets.bottom, 28) + 28
+                    : Math.max(insets.bottom, 16) + 24,
+              },
+            ]}
+          >
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalHeaderTitle}>Cycle Configuration ⚙️</Text>
               <TouchableOpacity

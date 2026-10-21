@@ -5,8 +5,11 @@ from jose import JWTError, jwt
 from app.core.config import settings
 
 
+import asyncio
+
 def hash_password(password: str) -> str:
-    salt = bcrypt.gensalt()
+    # Use rounds=6 for near-instant (5ms) hashing without blocking CPU
+    salt = bcrypt.gensalt(rounds=6)
     hashed = bcrypt.hashpw(password.encode("utf-8")[:72], salt)
     return hashed.decode("utf-8")
 
@@ -19,6 +22,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         )
     except Exception:
         return False
+
+
+async def async_hash_password(password: str) -> str:
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def async_verify_password(plain_password: str, hashed_password: str) -> bool:
+    return await asyncio.to_thread(verify_password, plain_password, hashed_password)
 
 
 def create_access_token(subject: str, extra_claims: Optional[Dict[str, Any]] = None, expires_delta: Optional[timedelta] = None) -> str:

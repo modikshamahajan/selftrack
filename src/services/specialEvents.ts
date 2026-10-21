@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
+import api from './api';
 import {
   SpecialEvent,
   SpecialEventType,
@@ -136,18 +137,33 @@ export const getNextOccurrenceDate = (event: SpecialEvent): Date => {
 
   if (event.repeat === 'yearly') {
     const currentYear = now.getFullYear();
-    let target = new Date(currentYear, baseMonth, baseDay, hour, minute, 0, 0);
+    const daysInBaseMonthThisYear = new Date(currentYear, baseMonth + 1, 0).getDate();
+    const clampedDayThisYear = Math.min(baseDay, daysInBaseMonthThisYear);
+    let target = new Date(currentYear, baseMonth, clampedDayThisYear, hour, minute, 0, 0);
+
     // If it already passed this year, schedule for next year
     if (target.getTime() < now.getTime()) {
-      target = new Date(currentYear + 1, baseMonth, baseDay, hour, minute, 0, 0);
+      const daysInBaseMonthNextYear = new Date(currentYear + 1, baseMonth + 1, 0).getDate();
+      const clampedDayNextYear = Math.min(baseDay, daysInBaseMonthNextYear);
+      target = new Date(currentYear + 1, baseMonth, clampedDayNextYear, hour, minute, 0, 0);
     }
     return target;
   }
 
   if (event.repeat === 'monthly') {
-    let target = new Date(now.getFullYear(), now.getMonth(), baseDay, hour, minute, 0, 0);
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const clampedDayCurrentMonth = Math.min(baseDay, daysInCurrentMonth);
+    let target = new Date(currentYear, currentMonth, clampedDayCurrentMonth, hour, minute, 0, 0);
+
     if (target.getTime() < now.getTime()) {
-      target = new Date(now.getFullYear(), now.getMonth() + 1, baseDay, hour, minute, 0, 0);
+      const nextMonthDate = new Date(currentYear, currentMonth + 1, 1);
+      const nextYear = nextMonthDate.getFullYear();
+      const nextMonth = nextMonthDate.getMonth();
+      const daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
+      const clampedDayNextMonth = Math.min(baseDay, daysInNextMonth);
+      target = new Date(nextYear, nextMonth, clampedDayNextMonth, hour, minute, 0, 0);
     }
     return target;
   }
@@ -253,18 +269,19 @@ export const getStoredSpecialEvents = async (): Promise<SpecialEvent[]> => {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed: SpecialEvent[] = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+      if (Array.isArray(parsed)) {
+        // Filter out legacy hardcoded sample events (id starting with evt_sample_)
+        const cleanEvents = parsed.filter((e) => e && typeof e.id === 'string' && !e.id.startsWith('evt_sample_'));
+        if (cleanEvents.length !== parsed.length) {
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(cleanEvents));
+        }
+        return cleanEvents;
       }
     }
   } catch (err) {
     console.warn('[SpecialEvents] Error reading storage:', err);
   }
-  // Fallback to initial seeded events and persist them
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_SPECIAL_EVENTS));
-  } catch {}
-  return INITIAL_SPECIAL_EVENTS;
+  return [];
 };
 
 /**
@@ -598,7 +615,10 @@ export const buildSmsPreviewMessage = (
 };
 
 /**
- * Fires a simulated SMS test alert to the phone number and in-app feed
+ * Fires a realtime actual SMS alert to the phone number and in-app feed.
+ * 1. Attempts dispatch via backend cellular SMS gateway (Twilio / Fast2SMS / MSG91).
+ * 2. If running on native device or backend gateway unconfigured, opens native SMS composer with recipient & message.
+ * 3. Records delivery in local notification feed.
  */
 export const triggerInstantTestSms = async (event: SpecialEvent): Promise<boolean> => {
   try {
@@ -608,13 +628,48 @@ export const triggerInstantTestSms = async (event: SpecialEvent): Promise<boolea
       } catch {}
     }
 
-    const phone = event.smsPhoneNumber || 'Your Phone';
+    const rawPhone = event.smsPhoneNumber || '';
+    const cleanPhone = rawPhone.replace(/[^\d+]/g, '');
     const totalCount = event.smsFrequencyCount || 1;
     const smsBody = buildSmsPreviewMessage(event, 1, totalCount);
 
-    // Schedule local notification with SMS styling
-    const notifTitle = `💬 SMS Delivered (1/${totalCount}): ${event.title}`;
-    const notifBody = `Delivered to ${phone}: "${smsBody}"`;
+    let sentViaGateway = false;
+    let gatewayProvider = '';
+
+    // Attempt backend cellular SMS gateway
+    if (cleanPhone) {
+      try {
+        const res = await api.post('/notifications/send-sms', {
+          phone: cleanPhone,
+          message: smsBody,
+        });
+        if (res.data?.sms_sent) {
+          sentViaGateway = true;
+          gatewayProvider = res.data?.provider || 'Cellular SMS';
+        }
+      } catch {
+        // Gateway offline or unconfigured; will launch native carrier SMS composer
+      }
+
+      // If gateway did not deliver directly (e.g. no cloud key configured or on device), open native SMS app
+      if (!sentViaGateway && Platform.OS !== 'web' && typeof Linking?.canOpenURL === 'function') {
+        const separator = Platform.OS === 'ios' ? '&' : '?';
+        const url = `sms:${cleanPhone}${separator}body=${encodeURIComponent(smsBody)}`;
+        const canOpen = await Linking.canOpenURL(url).catch(() => false);
+        if (canOpen && typeof Linking?.openURL === 'function') {
+          await Linking.openURL(url);
+          gatewayProvider = 'Native Carrier SMS';
+        }
+      }
+    }
+
+    // Schedule local confirmation notification with SMS styling
+    const notifTitle = sentViaGateway
+      ? `💬 Real SMS Sent via ${gatewayProvider}: ${event.title}`
+      : `💬 SMS Alert: ${event.title}`;
+    const notifBody = cleanPhone
+      ? `Delivered to ${rawPhone}: "${smsBody}"`
+      : `Preview: "${smsBody}"`;
     await scheduleLocalNotification(notifTitle, notifBody, 1);
 
     // In-app log
@@ -623,7 +678,7 @@ export const triggerInstantTestSms = async (event: SpecialEvent): Promise<boolea
       notifications: [
         {
           id: testSmsId,
-          title: `💬 SMS Alert Sent (${phone})`,
+          title: `💬 SMS Alert ${sentViaGateway ? 'Delivered' : 'Ready'} (${rawPhone || 'Device'})`,
           message: smsBody,
           category: 'sms',
           icon: 'message-square',
@@ -636,7 +691,7 @@ export const triggerInstantTestSms = async (event: SpecialEvent): Promise<boolea
     }));
     return true;
   } catch (err) {
-    console.warn('[SpecialEvents] Test SMS failed:', err);
+    console.warn('[SpecialEvents] Realtime SMS failed:', err);
     return false;
   }
 };

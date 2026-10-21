@@ -1,3 +1,4 @@
+import re
 import json
 import random
 import time
@@ -6,7 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
+from app.core.security import (
+    hash_password,
+    verify_password,
+    async_hash_password,
+    async_verify_password,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+)
 from app.core.deps import get_current_user
 from app.services.sms import dispatch_sms_otp
 from app.models.models import User, UserSettings
@@ -22,6 +31,7 @@ from app.schemas.schemas import (
     SendOtpRequest,
     VerifyOtpRequest,
     SendOtpResponse,
+    PhonePinAuthRequest,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -147,6 +157,135 @@ async def verify_otp(req: VerifyOtpRequest, db: AsyncSession = Depends(get_db)):
         user=user_resp
     )
 
+
+@router.post("/phone-pin", response_model=TokenResponse)
+async def login_with_phone_pin(req: PhonePinAuthRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Authenticate unique user via compulsory Full Name, Mobile Number, and Security PIN.
+    - If user exists: verifies PIN and returns previous user data.
+    - If user is new: registers user with Name, Phone, and secure PIN hash.
+    """
+    name = req.name.strip() if req.name else ""
+    raw_phone = req.phone.strip()
+    pin = req.pin.strip()
+    is_reg = bool(req.is_registration)
+
+    digits = re.sub(r"\D", "", raw_phone)
+    if len(digits) < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please enter a valid 10-digit mobile number."
+        )
+
+    # Standardize phone format (e.g. +919876543210 for 10-digit Indian numbers)
+    phone = f"+91{digits[-10:]}" if len(digits) == 10 and not raw_phone.startswith("+") else (f"+{digits}" if raw_phone.startswith("+") else raw_phone)
+
+    if not pin or len(pin) != 4 or not pin.isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please enter a valid 4-digit security PIN."
+        )
+
+    # Check if user with this phone number exists in database
+    result = await db.execute(
+        select(User).where(
+            or_(
+                User.phone == phone,
+                User.phone == digits,
+                User.phone == digits[-10:],
+                User.email == f"{phone}@selftrack.app",
+                User.email == f"{digits[-10:]}@selftrack.app"
+            )
+        )
+    )
+    user = result.scalar_one_or_none()
+
+    if is_reg:
+        # Explicit registration mode
+        if user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"An account with mobile number {phone} is already registered. Please switch to Sign In and enter your PIN."
+            )
+        if not name or len(name) < 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please enter your full name (at least 2 characters) to create an account."
+            )
+    else:
+        # Sign-in mode: user must exist
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No registered account found for mobile number {phone}. Please check your mobile number or switch to Register to create a new account."
+            )
+
+    if not user:
+        # Create brand new unique user
+        display_name = name if name and len(name) >= 2 else "SelfTrack User"
+        hashed_pin = await async_hash_password(pin)
+        user = User(
+            name=display_name,
+            phone=phone,
+            email=f"{digits[-10:]}@selftrack.app",
+            password_hash=hashed_pin,
+            interests=json.dumps([]),
+            goals=json.dumps([]),
+            total_xp=100,  # Welcome bonus
+            level=1,
+            streak_count=0
+        )
+        db.add(user)
+        await db.flush()
+
+        user_settings = UserSettings(user_id=user.id)
+        db.add(user_settings)
+        await db.commit()
+        await db.refresh(user)
+    else:
+        # User already exists in DB -> Strictly verify PIN against stored hash
+        if user.password_hash:
+            is_valid_pin = await async_verify_password(pin, user.password_hash)
+            if not is_valid_pin:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=f"Incorrect PIN for mobile number {phone}. The entered PIN does not match. Either the mobile number or PIN is incorrect, or you need to register."
+                )
+        else:
+            # Set PIN for the first time if user didn't have a password_hash set
+            user.password_hash = await async_hash_password(pin)
+
+        # Update name if provided
+        if name:
+            user.name = name
+        if not user.phone:
+            user.phone = phone
+
+        await db.commit()
+        await db.refresh(user)
+
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
+
+    user_resp = UserResponse(
+        id=user.id,
+        name=user.name,
+        phone=user.phone or phone,
+        email=user.email or "",
+        avatar_url=user.avatar_url or "",
+        total_xp=user.total_xp or 0,
+        level=user.level or 1,
+        streak_count=user.streak_count or 0,
+        interests=json.loads(user.interests) if user.interests else [],
+        goals=json.loads(user.goals) if user.goals else [],
+        created_at=user.created_at
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user=user_resp
+    )
 
 
 @router.post("/register", response_model=TokenResponse)

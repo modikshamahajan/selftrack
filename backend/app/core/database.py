@@ -5,7 +5,7 @@ from sqlalchemy import text
 from app.core.config import settings
 
 # Engine configuration
-connect_args = {"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+connect_args = {"check_same_thread": False, "timeout": 30} if "sqlite" in settings.DATABASE_URL else {}
 
 engine = create_async_engine(
     settings.DATABASE_URL,
@@ -34,6 +34,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db():
     async with engine.begin() as conn:
+        # SQLite production concurrency settings
+        if "sqlite" in settings.DATABASE_URL:
+            try:
+                await conn.execute(text("PRAGMA journal_mode = WAL"))
+                await conn.execute(text("PRAGMA synchronous = NORMAL"))
+                await conn.execute(text("PRAGMA busy_timeout = 5000"))
+            except Exception:
+                pass
         await conn.run_sync(Base.metadata.create_all)
         try:
             await conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(50)"))

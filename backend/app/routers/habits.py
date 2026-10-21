@@ -23,13 +23,19 @@ async def get_habits(user: User = Depends(get_current_user), db: AsyncSession = 
     habits = result.scalars().all()
     today_str = get_today_str()
     
+    # High-Performance Batch Optimization: Fetch all habit logs in 1 query instead of N queries
+    habit_ids = [h.id for h in habits]
+    logs_by_habit = {}
+    if habit_ids:
+        logs_res = await db.execute(
+            select(HabitLog).where(HabitLog.habit_id.in_(habit_ids))
+        )
+        for log in logs_res.scalars().all():
+            logs_by_habit.setdefault(log.habit_id, []).append(log)
+
     response = []
     for h in habits:
-        # Fetch habit logs
-        logs_res = await db.execute(
-            select(HabitLog).where(HabitLog.habit_id == h.id)
-        )
-        logs = logs_res.scalars().all()
+        logs = logs_by_habit.get(h.id, [])
         completed_days = {log.log_date: log.completed for log in logs if log.completed}
         completed_today = completed_days.get(today_str, False)
         
@@ -181,6 +187,13 @@ async def toggle_habit(
         user.total_xp = (user.total_xp or 0) + 20  # +20 XP awarded
         user.level = (user.total_xp // 1000) + 1
         
+    # Recalculate user's global streak_count across all active habits
+    all_habits_res = await db.execute(
+        select(Habit.current_streak).where(and_(Habit.user_id == user.id, Habit.is_archived == False))
+    )
+    streaks = all_habits_res.scalars().all()
+    user.streak_count = max(streaks) if streaks else 0
+
     await db.commit()
     await db.refresh(habit)
     

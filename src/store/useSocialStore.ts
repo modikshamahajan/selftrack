@@ -54,41 +54,7 @@ interface SocialState {
 export const useSocialStore = create<SocialState>()(
   persist(
     (set, get) => ({
-  posts: [
-    {
-      id: 'post_1',
-      user: 'Maya Lin',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-      time: '2h ago',
-      content: 'Just completed a 7-day hydration streak! 💧 Feeling so much more energetic throughout the day.',
-      hasImage: false,
-      likes: 12,
-      comments: 3,
-      commentsList: [
-        { id: 'c1', user: 'Liam Chen', text: 'Incredible discipline! Keep it up 🙌', time: '1h ago' },
-        { id: 'c2', user: 'Sofia Patel', text: 'Hydration makes such a huge difference! 💧', time: '45m ago' },
-        { id: 'c3', user: 'Alex Rivera', text: 'Great achievement Maya!', time: '20m ago' },
-      ],
-      achievement: 'Hydration Hero 🏆',
-      isLiked: false,
-    },
-    {
-      id: 'post_2',
-      user: 'Alex Rivera',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-      time: '5h ago',
-      content: 'Hit 12,000 steps today on the morning trail! Consistency is everything. 🏃‍♂️👟',
-      hasImage: false,
-      likes: 24,
-      comments: 2,
-      commentsList: [
-        { id: 'c4', user: 'Maya Lin', text: 'Awesome trail walk Alex! 🏃‍♂️', time: '3h ago' },
-        { id: 'c5', user: 'David Miller', text: 'Crushing the step goals!', time: '1h ago' },
-      ],
-      achievement: '10k Steps Master ⭐',
-      isLiked: true,
-    },
-  ],
+  posts: [],
   stories: [],
   isLoading: false,
 
@@ -115,9 +81,12 @@ export const useSocialStore = create<SocialState>()(
             isLiked: p.isLiked || false,
           }));
 
-          // Keep any purely local unsynced posts
+          // Keep any purely local unsynced posts, filtering out any legacy static posts
           const localOnly = state.posts.filter(
-            (p) => p.id.startsWith('post_') && !backendPosts.some((bp) => bp.id === p.id)
+            (p) =>
+              p.id.startsWith('post_') &&
+              !['post_1', 'post_2'].includes(p.id) &&
+              !backendPosts.some((bp) => bp.id === p.id)
           );
 
           return { posts: [...localOnly, ...backendPosts], isLoading: false };
@@ -170,11 +139,13 @@ export const useSocialStore = create<SocialState>()(
   },
 
   likePost: async (postId: string) => {
+    let wasLiked = false;
     // Optimistic like
     set((state) => ({
       posts: state.posts.map((p) => {
         if (p.id === postId) {
-          const isCurrentlyLiked = !!p.isLiked;
+          wasLiked = !!p.isLiked;
+          const isCurrentlyLiked = wasLiked;
           return {
             ...p,
             likes: isCurrentlyLiked ? Math.max(0, p.likes - 1) : p.likes + 1,
@@ -186,7 +157,7 @@ export const useSocialStore = create<SocialState>()(
     }));
 
     try {
-      await api.post(`/social/posts/${postId}/like`);
+      await api.post(`/social/posts/${postId}/like`, { action: wasLiked ? 'unlike' : 'like' });
     } catch {
       // Keep optimistic
     }
@@ -278,6 +249,15 @@ export const useSocialStore = create<SocialState>()(
     {
       name: 'social-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 2,
+      migrate: (persistedState: any) => {
+        if (persistedState && Array.isArray(persistedState.posts)) {
+          persistedState.posts = persistedState.posts.filter(
+            (p: any) => p && !['post_1', 'post_2'].includes(p.id)
+          );
+        }
+        return persistedState;
+      },
     }
   )
 );

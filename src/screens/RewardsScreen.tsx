@@ -92,14 +92,14 @@ const DEFAULT_BADGES = [
     image: FIRE_BADGE,
     bg: '#FFF1F2',
     border: '#FECDD3',
-    is_unlocked: true,
+    is_unlocked: false,
   },
   {
     title: 'Consistent',
     image: PURPLE_BADGE,
     bg: '#F5F3FF',
     border: '#DDD6FE',
-    is_unlocked: true,
+    is_unlocked: false,
   },
   {
     title: 'Focused',

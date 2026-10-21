@@ -235,7 +235,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [hasCheeredSquad, setHasCheeredSquad] = useState(false);
-  const [squadCheerCount, setSquadCheerCount] = useState(84);
+  const [squadCheerCount, setSquadCheerCount] = useState(0);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -503,22 +503,6 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       }
     });
 
-    // Curated active community friends to ensure lively community
-    const defaultFriends = [
-      { name: 'Maya', fullName: 'Maya Lin', emoji: '🌟', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150' },
-      { name: 'Alex', fullName: 'Alex Rivera', emoji: '🔥', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150' },
-      { name: 'Liam', fullName: 'Liam Chen', emoji: '⚡', avatar: undefined },
-      { name: 'Sofia', fullName: 'Sofia Patel', emoji: '🌿', avatar: undefined },
-      { name: 'David', fullName: 'David Miller', emoji: '💪', avatar: undefined },
-    ];
-
-    defaultFriends.forEach((df) => {
-      if (!seen.has(df.name) && result.length < 6) {
-        seen.add(df.name);
-        result.push(df);
-      }
-    });
-
     return result;
   }, [posts, user?.name]);
 
@@ -648,8 +632,12 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                       <Text style={{ fontSize: 16 }}>🏆</Text>
                     </LinearGradient>
                     <View>
-                      <Text style={styles.squadTitle}>Weekly Squad Challenge</Text>
-                      <Text style={styles.squadSubtext}>100k Community Steps • 74% Done</Text>
+                      <Text style={styles.squadTitle}>Community Cheers & Wins</Text>
+                      <Text style={styles.squadSubtext}>
+                        {posts.length === 0 && squadCheerCount === 0
+                          ? '0 Community Wins • Be the first to share!'
+                          : `${posts.length} Shared Wins • ${squadCheerCount} Squad Cheers`}
+                      </Text>
                     </View>
                   </View>
 
@@ -673,7 +661,16 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     colors={['#EC4899', '#8B5CF6']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={[styles.squadProgressBarFill, { width: '74%' }]}
+                    style={[
+                      styles.squadProgressBarFill,
+                      {
+                        width: `${
+                          posts.length === 0 && squadCheerCount === 0
+                            ? 0
+                            : Math.min(100, Math.round(((squadCheerCount + posts.length * 5) / 50) * 100))
+                        }%`,
+                      },
+                    ]}
                   />
                 </View>
               </LinearGradient>
@@ -797,7 +794,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   key={`member-${u.name}-${i}`}
                   style={styles.storyItem}
                   onPress={() => {
-                    Alert.alert(u.name, `${u.fullName} is on a consistent streak! Give them a cheer.`);
+                    Alert.alert(u.name, `Cheer on ${u.fullName} for sharing their healthy journey!`);
                   }}
                   activeOpacity={0.8}
                 >

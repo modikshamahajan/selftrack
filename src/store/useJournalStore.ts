@@ -31,23 +31,12 @@ interface JournalState {
   addEntry: (entry: { title: string; content: string; mood?: string; mood_score?: number; images?: string[]; has_voice?: boolean; tags?: string[]; date?: string }) => Promise<JournalItem>;
   updateEntry: (id: string, updates: Partial<JournalItem>) => Promise<JournalItem | undefined>;
   deleteEntry: (id: string) => Promise<void>;
+  clearAllEntries: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'selftrack_journals';
 
-const DEFAULT_JOURNALS: JournalItem[] = [
-  {
-    id: 'journal_1',
-    date: formatLocalDate(),
-    title: 'Starting SelfTrack Journey! 🚀',
-    content: 'Excited to begin tracking my daily habits, fitness, and thoughts in SelfTrack. Taking it one day at a time.',
-    mood: 'great',
-    mood_score: 5,
-    images: [],
-    has_voice: false,
-    created_at: new Date().toISOString(),
-  },
-];
+const DEFAULT_JOURNALS: JournalItem[] = [];
 
 const saveToStorage = async (entries: JournalItem[]) => {
   try {
@@ -66,7 +55,12 @@ export const useJournalStore = create<JournalState>((set, get) => ({
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
-        set({ entries: JSON.parse(stored) });
+        const parsed = JSON.parse(stored);
+        const filtered = Array.isArray(parsed) ? parsed.filter((e: any) => e && e.id !== 'journal_1') : [];
+        set({ entries: filtered });
+        if (Array.isArray(parsed) && parsed.length !== filtered.length) {
+          await saveToStorage(filtered);
+        }
       } else {
         await saveToStorage(DEFAULT_JOURNALS);
       }
@@ -87,13 +81,18 @@ export const useJournalStore = create<JournalState>((set, get) => ({
     }
   },
 
+  clearAllEntries: async () => {
+    set({ entries: [] });
+    await saveToStorage([]);
+  },
+
   addEntry: async (entry) => {
     set({ isLoading: true });
 
     const localId = 'journal_' + Date.now();
     const newEntry: JournalItem = {
       id: localId,
-      date: entry.date || new Date().toISOString().split('T')[0],
+      date: entry.date || formatLocalDate(),
       title: entry.title || 'Journal Entry',
       content: entry.content || '',
       mood: entry.mood || 'good',

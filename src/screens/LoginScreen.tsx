@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  Image,
   TextInput,
   ActivityIndicator,
+  Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather as Icon } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Typography } from '../theme/typography';
 import { BorderRadius, Shadow } from '../theme/spacing';
@@ -23,130 +25,292 @@ import { useAuthStore } from '../store/useAuthStore';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
+const { width } = Dimensions.get('window');
+const HEADER_LEAF = require('../../assets/Images/headerleaf.png');
+
 const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) => {
-  // Step 1: 'phone' (Name & Mobile Number input), Step 2: 'otp' (6-digit OTP verification)
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [showConfirmPin, setShowConfirmPin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [countdown, setCountdown] = useState(30);
-  const [canResend, setCanResend] = useState(false);
-  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
-
-  const otpInputsRef = useRef<(TextInput | null)[]>([]);
-  const HEADER_LEAF = require('../../assets/Images/headerleaf.png');
-
-  const isOtpComplete = otp.join('').length === 6;
-
-  // Countdown timer for OTP resend - stops when OTP is completely entered or being verified
-  useEffect(() => {
-    let timer: any;
-    if (step === 'otp' && countdown > 0 && !isOtpComplete && !isLoading) {
-      timer = setTimeout(() => setCountdown((prev) => prev - 1), 1000);
-    } else if (countdown === 0) {
-      setCanResend(true);
-    }
-    return () => clearTimeout(timer);
-  }, [step, countdown, isOtpComplete, isLoading]);
+  const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
+  const [activeErrorField, setActiveErrorField] = useState<'name' | 'phone' | 'pin' | 'confirmPin' | null>(null);
+  const [fieldErrorMessages, setFieldErrorMessages] = useState<{ [key: string]: string }>({});
 
   const cleanPhone = `${countryCode}${phoneNumber.trim().replace(/\D/g, '')}`;
+  const digitsOnly = phoneNumber.trim().replace(/\D/g, '');
 
-  // Request OTP from backend
-  const handleSendOtp = async () => {
-    const trimmedName = fullName.trim();
-    const digitsOnly = phoneNumber.trim().replace(/\D/g, '');
-
-    if (!trimmedName || trimmedName.length < 2) {
-      return Alert.alert('Name Required', 'Please enter your full name (at least 2 characters).');
-    }
-
-    if (!digitsOnly || digitsOnly.length < 10) {
-      return Alert.alert('Invalid Mobile Number', 'Please enter a valid 10-digit mobile number.');
-    }
-
-    setIsLoading(true);
-    try {
-      const res = await useAuthStore.getState().sendOtp(cleanPhone, trimmedName);
-      if (res.dev_otp) {
-        setDevOtpHint(res.dev_otp);
-      }
-      setStep('otp');
-      setCountdown(30);
-      setCanResend(false);
-      setOtp(['', '', '', '', '', '']);
-      setTimeout(() => otpInputsRef.current[0]?.focus(), 300);
-    } catch (error: any) {
-      console.error(error);
-      const message = error.response?.data?.detail || 'Failed to send verification code. Please check your network connection.';
-      Alert.alert('Request Failed', message);
-    } finally {
-      setIsLoading(false);
+  const handleTabChange = (mode: 'signin' | 'register') => {
+    if (isLoading) return;
+    if (mode !== authMode) {
+      try {
+        Haptics.selectionAsync().catch(() => {});
+      } catch {}
+      setAuthMode(mode);
+      setPin('');
+      setConfirmPin('');
+      setAuthErrorMessage(null);
+      setActiveErrorField(null);
+      setFieldErrorMessages({});
     }
   };
 
-  // Verify OTP and complete login
-  const handleVerifyOtp = async (customOtp?: string) => {
-    const fullOtp = customOtp || otp.join('');
-    if (fullOtp.length !== 6) {
-      return Alert.alert('Incomplete Code', 'Please enter the complete 6-digit verification code.');
+  const validateForm = (): boolean => {
+    const trimmedName = fullName.trim();
+    const cleanPin = pin.trim();
+    const cleanConfirmPin = confirmPin.trim();
+    const digits = phoneNumber.trim().replace(/\D/g, '');
+
+    // Reset previous errors
+    setActiveErrorField(null);
+    setFieldErrorMessages({});
+    setAuthErrorMessage(null);
+
+    // 1. Full Name (only in register mode)
+    if (authMode === 'register') {
+      if (!trimmedName) {
+        setActiveErrorField('name');
+        const msg = 'Please enter your full name.';
+        setFieldErrorMessages({ name: msg });
+        setAuthErrorMessage(msg);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        } catch {}
+        Alert.alert('Full Name Required', msg);
+        return false;
+      }
+      if (trimmedName.length < 2) {
+        setActiveErrorField('name');
+        const msg = 'Full name must be at least 2 characters.';
+        setFieldErrorMessages({ name: msg });
+        setAuthErrorMessage(msg);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        } catch {}
+        Alert.alert('Invalid Name', msg);
+        return false;
+      }
     }
 
+    // 2. Mobile Number (both modes)
+    if (!digits) {
+      setActiveErrorField('phone');
+      const msg = 'Please enter your 10-digit mobile number.';
+      setFieldErrorMessages({ phone: msg });
+      setAuthErrorMessage(msg);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      } catch {}
+      Alert.alert('Mobile Number Required', msg);
+      return false;
+    }
+    if (digits.length !== 10) {
+      setActiveErrorField('phone');
+      const msg = `Mobile number must be exactly 10 digits (currently ${digits.length} digits).`;
+      setFieldErrorMessages({ phone: msg });
+      setAuthErrorMessage(msg);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      } catch {}
+      Alert.alert('Invalid Mobile Number', msg);
+      return false;
+    }
+    if (!/^[6-9]\d{9}$/.test(digits)) {
+      setActiveErrorField('phone');
+      const msg = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
+      setFieldErrorMessages({ phone: msg });
+      setAuthErrorMessage(msg);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      } catch {}
+      Alert.alert('Invalid Mobile Number', msg);
+      return false;
+    }
+
+    // 3. Security PIN (both modes)
+    if (!cleanPin) {
+      setActiveErrorField('pin');
+      const msg = 'Please enter your 4-digit security PIN.';
+      setFieldErrorMessages({ pin: msg });
+      setAuthErrorMessage(msg);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      } catch {}
+      Alert.alert('Security PIN Required', msg);
+      return false;
+    }
+    if (cleanPin.length !== 4 || !/^\d{4}$/.test(cleanPin)) {
+      setActiveErrorField('pin');
+      const msg = `PIN must be exactly 4 numeric digits (currently ${cleanPin.length} digits).`;
+      setFieldErrorMessages({ pin: msg });
+      setAuthErrorMessage(msg);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      } catch {}
+      Alert.alert('Invalid Security PIN', msg);
+      return false;
+    }
+
+    // 4. Confirm PIN (only in register mode)
+    if (authMode === 'register') {
+      if (!cleanConfirmPin) {
+        setActiveErrorField('confirmPin');
+        const msg = 'Please confirm your 4-digit security PIN.';
+        setFieldErrorMessages({ confirmPin: msg });
+        setAuthErrorMessage(msg);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        } catch {}
+        Alert.alert('Confirm PIN Required', msg);
+        return false;
+      }
+      if (cleanConfirmPin.length !== 4 || !/^\d{4}$/.test(cleanConfirmPin)) {
+        setActiveErrorField('confirmPin');
+        const msg = `Confirmation PIN must be exactly 4 numeric digits (currently ${cleanConfirmPin.length} digits).`;
+        setFieldErrorMessages({ confirmPin: msg });
+        setAuthErrorMessage(msg);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        } catch {}
+        Alert.alert('Invalid Confirmation PIN', msg);
+        return false;
+      }
+      if (cleanPin !== cleanConfirmPin) {
+        setActiveErrorField('confirmPin');
+        const msg = 'PINs do not match. Please ensure both 4-digit PINs are identical.';
+        setFieldErrorMessages({ confirmPin: msg });
+        setAuthErrorMessage(msg);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        } catch {}
+        Alert.alert('PINs Do Not Match', msg);
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handlePhonePinAuth = async () => {
+    // 1. Cross-check and validate all field data
+    const isValid = validateForm();
+    if (!isValid) return;
+
+    // 2. Lock & disable all fields immediately by setting isLoading = true
     setIsLoading(true);
+    setActiveErrorField(null);
+    setFieldErrorMessages({});
+    setAuthErrorMessage(null);
+
     try {
-      await useAuthStore.getState().loginWithOtp(cleanPhone, fullOtp, fullName.trim());
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    } catch {}
+
+    const trimmedName = fullName.trim();
+    const cleanPin = pin.trim();
+
+    try {
+      await useAuthStore.getState().loginWithPhonePin(
+        trimmedName,
+        cleanPhone,
+        cleanPin,
+        authMode === 'register'
+      );
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } catch {}
       navigation.replace('MainTabs');
     } catch (error: any) {
       console.error(error);
-      const message = error.response?.data?.detail || 'Invalid or expired OTP. Please try again.';
-      Alert.alert('Verification Failed', message);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      } catch {}
+
+      const statusCode = error.response?.status;
+      const detailMessage = error.response?.data?.detail;
+
+      if (authMode === 'signin') {
+        if (statusCode === 404) {
+          const msg =
+            detailMessage ||
+            'No registered account found with this mobile number. Either check your number or tap "Register" to create a new account.';
+          setAuthErrorMessage(msg);
+          setActiveErrorField('phone');
+          Alert.alert('Account Not Found', msg, [
+            { text: 'Check Number', style: 'cancel' },
+            {
+              text: 'Register Now',
+              style: 'default',
+              onPress: () => {
+                setAuthMode('register');
+                setConfirmPin('');
+                setAuthErrorMessage(null);
+                setActiveErrorField(null);
+              },
+            },
+          ]);
+          return;
+        }
+
+        if (statusCode === 401) {
+          const msg =
+            detailMessage ||
+            'The PIN you entered does not match this mobile number. Either the mobile number or PIN is not correct, or please register as a new user.';
+          setAuthErrorMessage(msg);
+          setActiveErrorField('pin');
+          Alert.alert('Incorrect PIN', msg, [
+            { text: 'Try Again', style: 'cancel' },
+            {
+              text: 'Register New Account',
+              style: 'default',
+              onPress: () => {
+                setAuthMode('register');
+                setConfirmPin('');
+                setAuthErrorMessage(null);
+                setActiveErrorField(null);
+              },
+            },
+          ]);
+          return;
+        }
+      } else if (authMode === 'register') {
+        if (statusCode === 400 && detailMessage?.includes('already registered')) {
+          setAuthErrorMessage(detailMessage);
+          setActiveErrorField('phone');
+          Alert.alert('Already Registered', detailMessage, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Sign In Now',
+              style: 'default',
+              onPress: () => {
+                setAuthMode('signin');
+                setConfirmPin('');
+                setAuthErrorMessage(null);
+                setActiveErrorField(null);
+              },
+            },
+          ]);
+          return;
+        }
+      }
+
+      const message =
+        detailMessage ||
+        'Authentication failed. Please check your credentials and network connection.';
+      setAuthErrorMessage(message);
+      Alert.alert(authMode === 'register' ? 'Registration Failed' : 'Sign In Failed', message);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Handle auto-progress across 6 OTP boxes
-  const handleOtpChange = (text: string, index: number) => {
-    const cleanChar = text.replace(/\D/g, '');
-    const newOtp = [...otp];
-
-    if (cleanChar.length > 1) {
-      // User pasted full OTP
-      const pasted = cleanChar.slice(0, 6).split('');
-      pasted.forEach((char, i) => {
-        if (i < 6) newOtp[i] = char;
-      });
-      setOtp(newOtp);
-      if (pasted.length === 6) {
-        handleVerifyOtp(pasted.join(''));
-      }
-      return;
-    }
-
-    newOtp[index] = cleanChar;
-    setOtp(newOtp);
-
-    if (cleanChar && index < 5) {
-      otpInputsRef.current[index + 1]?.focus();
-    }
-
-    // Auto submit if 6th digit entered
-    if (cleanChar && index === 5) {
-      const full = newOtp.join('');
-      if (full.length === 6) {
-        handleVerifyOtp(full);
-      }
-    }
-  };
-
-  const handleOtpKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      otpInputsRef.current[index - 1]?.focus();
     }
   };
 
   const handleContinueAsGuest = async () => {
+    if (isLoading) return;
     setIsLoading(true);
     try {
       await useAuthStore.getState().continueAsGuest();
@@ -158,6 +322,14 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Soft Ambient Backdrop */}
+      <LinearGradient
+        colors={['#ECFDF5', '#F8FAFC', '#FFFFFF']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0.6 }}
+        style={StyleSheet.absoluteFill}
+      />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardContainer}
@@ -176,211 +348,379 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
             />
           </View>
 
-          {/* Branding & Titles */}
-          <View style={styles.titleSection}>
-            <View style={styles.brandBadge}>
-              <Icon name="shield" size={14} color="#16A34A" />
-              <Text style={styles.brandBadgeText}>SECURE OTP LOGIN</Text>
-            </View>
-            <Text style={styles.mainTitle}>
-              {step === 'phone' ? 'Welcome to SelfTrack' : 'Enter Verification Code'}
-            </Text>
-            <Text style={styles.subtitle}>
-              {step === 'phone'
-                ? 'Empowering your habits, mindful journals, and daily health wellness.'
-                : `We've sent a 6-digit one-time password to ${countryCode} ${phoneNumber.trim()}`}
-            </Text>
+          {/* Header Brand Section */}
+          <View style={styles.headerSection}>
+            <Text style={styles.appName}>SelfTrack</Text>
+            <Text style={styles.appTagline}>Mindful Habits • Growth • Wellness</Text>
           </View>
 
-          {/* STEP 1: Full Name and Mobile Number */}
-          {step === 'phone' ? (
-            <View style={styles.formContainer}>
-              {/* Full Name Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Full Name</Text>
-                <View style={styles.inputFieldBox}>
-                  <Icon name="user" size={18} color="#64748B" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Enter your full name"
-                    placeholderTextColor="#94A3B8"
-                    value={fullName}
-                    onChangeText={setFullName}
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                  />
-                </View>
-              </View>
+          {/* Card Container */}
+          <View style={styles.mainCard}>
+            {/* Segmented Mode Switcher */}
+            <View style={styles.segmentedContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.segmentTab,
+                  authMode === 'signin' && styles.segmentTabActive,
+                  isLoading && styles.tabDisabled,
+                ]}
+                onPress={() => handleTabChange('signin')}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                <Icon
+                  name="log-in"
+                  size={15}
+                  color={authMode === 'signin' ? '#065F46' : '#64748B'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[
+                    styles.segmentText,
+                    authMode === 'signin' && styles.segmentTextActive,
+                  ]}
+                >
+                  Sign In
+                </Text>
+              </TouchableOpacity>
 
-              {/* Mobile Number Input */}
+              <TouchableOpacity
+                style={[
+                  styles.segmentTab,
+                  authMode === 'register' && styles.segmentTabActive,
+                  isLoading && styles.tabDisabled,
+                ]}
+                onPress={() => handleTabChange('register')}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                <Icon
+                  name="user-plus"
+                  size={15}
+                  color={authMode === 'register' ? '#065F46' : '#64748B'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[
+                    styles.segmentText,
+                    authMode === 'register' && styles.segmentTextActive,
+                  ]}
+                >
+                  New User
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Mode Sub-Header */}
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>
+                {authMode === 'signin' ? 'Welcome Back' : 'Create Account'}
+              </Text>
+              <Text style={styles.cardSubtitle}>
+                {authMode === 'signin'
+                  ? 'Enter your mobile number and 4-digit PIN to sign in'
+                  : 'Enter your name, mobile, and create a 4-digit security PIN'}
+              </Text>
+            </View>
+
+            {/* Inline Error Notice */}
+            {authErrorMessage ? (
+              <View style={styles.errorBanner}>
+                <Icon
+                  name="alert-triangle"
+                  size={17}
+                  color="#DC2626"
+                  style={{ marginTop: 2, marginRight: 8 }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.errorBannerText}>{authErrorMessage}</Text>
+                  {authMode === 'signin' && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setAuthMode('register');
+                        setConfirmPin('');
+                        setAuthErrorMessage(null);
+                        setActiveErrorField(null);
+                      }}
+                      disabled={isLoading}
+                      style={styles.errorBannerAction}
+                    >
+                      <Text style={styles.errorBannerActionText}>
+                        Tap here to Register as New User →
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {authMode === 'register' &&
+                    authErrorMessage.includes('already registered') && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setAuthMode('signin');
+                          setConfirmPin('');
+                          setAuthErrorMessage(null);
+                          setActiveErrorField(null);
+                        }}
+                        disabled={isLoading}
+                        style={styles.errorBannerAction}
+                      >
+                        <Text style={styles.errorBannerActionText}>
+                          Tap here to Sign In with PIN →
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => setAuthErrorMessage(null)}
+                  disabled={isLoading}
+                  style={{ padding: 4 }}
+                >
+                  <Icon name="x" size={15} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {/* Form Fields */}
+            <View style={styles.formFields}>
+              {/* 1. Full Name (Register Mode Only) */}
+              {authMode === 'register' && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Full Name</Text>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      isLoading && styles.inputContainerDisabled,
+                      activeErrorField === 'name' && styles.inputErrorBorder,
+                    ]}
+                  >
+                    <Icon name="user" size={18} color="#059669" style={styles.fieldIcon} />
+                    <TextInput
+                      style={[styles.textInput, isLoading && styles.inputDisabled]}
+                      placeholder="e.g. Tushar Sharma"
+                      placeholderTextColor="#94A3B8"
+                      value={fullName}
+                      editable={!isLoading}
+                      onChangeText={(text) => {
+                        setFullName(text);
+                        if (activeErrorField === 'name') setActiveErrorField(null);
+                        if (authErrorMessage) setAuthErrorMessage(null);
+                      }}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                    />
+                  </View>
+                  {activeErrorField === 'name' && !!fieldErrorMessages.name && (
+                    <Text style={styles.fieldErrorText}>{fieldErrorMessages.name}</Text>
+                  )}
+                </View>
+              )}
+
+              {/* 2. Mobile Number (Both Modes) */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Mobile Number</Text>
-                <View style={styles.phoneInputRow}>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    isLoading && styles.inputContainerDisabled,
+                    activeErrorField === 'phone' && styles.inputErrorBorder,
+                  ]}
+                >
                   <View style={styles.countryCodeBadge}>
                     <Text style={styles.flagEmoji}>🇮🇳</Text>
                     <Text style={styles.countryCodeText}>{countryCode}</Text>
+                    <View style={styles.codeDivider} />
                   </View>
-                  <View style={[styles.inputFieldBox, styles.phoneNumberBox]}>
-                    <Icon name="phone" size={18} color="#64748B" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="10-digit mobile number"
-                      placeholderTextColor="#94A3B8"
-                      value={phoneNumber}
-                      onChangeText={(t) => setPhoneNumber(t.replace(/\D/g, '').slice(0, 10))}
-                      keyboardType="phone-pad"
-                      maxLength={10}
-                      returnKeyType="done"
-                      onSubmitEditing={handleSendOtp}
-                    />
-                  </View>
+                  <TextInput
+                    style={[styles.textInput, isLoading && styles.inputDisabled]}
+                    placeholder="98765 43210"
+                    placeholderTextColor="#94A3B8"
+                    value={phoneNumber}
+                    editable={!isLoading}
+                    onChangeText={(t) => {
+                      setPhoneNumber(t.replace(/\D/g, '').slice(0, 10));
+                      if (activeErrorField === 'phone') setActiveErrorField(null);
+                      if (authErrorMessage) setAuthErrorMessage(null);
+                    }}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    returnKeyType={authMode === 'register' ? 'next' : 'done'}
+                  />
+                  {digitsOnly.length === 10 && (
+                    <Icon name="check-circle" size={17} color="#10B981" style={{ marginRight: 6 }} />
+                  )}
                 </View>
-                <Text style={styles.phoneHelperText}>
-                  We will send a 6-digit OTP code to verify and sign in.
-                </Text>
+                {activeErrorField === 'phone' && !!fieldErrorMessages.phone && (
+                  <Text style={styles.fieldErrorText}>{fieldErrorMessages.phone}</Text>
+                )}
               </View>
 
-              {/* Action Button */}
+              {/* 3. Security PIN Field */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelWithHint}>
+                  <Text style={styles.inputLabel}>
+                    {authMode === 'register' ? 'Create 4-Digit PIN' : 'Security PIN'}
+                  </Text>
+                  <Text style={styles.pinHint}>4 digits</Text>
+                </View>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    isLoading && styles.inputContainerDisabled,
+                    activeErrorField === 'pin' && styles.inputErrorBorder,
+                  ]}
+                >
+                  <Icon name="lock" size={18} color="#059669" style={styles.fieldIcon} />
+                  <TextInput
+                    style={[styles.textInput, styles.pinInput, isLoading && styles.inputDisabled]}
+                    placeholder="••••"
+                    placeholderTextColor="#CBD5E1"
+                    value={pin.slice(0, 4)}
+                    editable={!isLoading}
+                    onChangeText={(t) => {
+                      const sanitized = t.replace(/\D/g, '').slice(0, 4);
+                      setPin(sanitized);
+                      if (activeErrorField === 'pin') setActiveErrorField(null);
+                      if (authErrorMessage) setAuthErrorMessage(null);
+                    }}
+                    keyboardType="number-pad"
+                    secureTextEntry={!showPin}
+                    maxLength={4}
+                    returnKeyType={authMode === 'register' ? 'next' : 'done'}
+                    onSubmitEditing={handlePhonePinAuth}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPin(!showPin)}
+                    disabled={isLoading}
+                    style={styles.eyeIconBtn}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Icon name={showPin ? 'eye' : 'eye-off'} size={18} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+                {activeErrorField === 'pin' && !!fieldErrorMessages.pin && (
+                  <Text style={styles.fieldErrorText}>{fieldErrorMessages.pin}</Text>
+                )}
+              </View>
+
+              {/* 4. Confirm PIN (Register Mode Only) */}
+              {authMode === 'register' && (
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelWithHint}>
+                    <Text style={styles.inputLabel}>Confirm Security PIN</Text>
+                    {confirmPin.length === 4 && (
+                      <Text
+                        style={[
+                          styles.matchBadge,
+                          pin === confirmPin ? styles.matchSuccess : styles.matchError,
+                        ]}
+                      >
+                        {pin === confirmPin ? '✓ Matched' : '✕ No match'}
+                      </Text>
+                    )}
+                  </View>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      isLoading && styles.inputContainerDisabled,
+                      activeErrorField === 'confirmPin' && styles.inputErrorBorder,
+                      confirmPin.length === 4 && pin === confirmPin && styles.inputSuccessBorder,
+                    ]}
+                  >
+                    <Icon name="shield" size={18} color="#059669" style={styles.fieldIcon} />
+                    <TextInput
+                      style={[styles.textInput, styles.pinInput, isLoading && styles.inputDisabled]}
+                      placeholder="••••"
+                      placeholderTextColor="#CBD5E1"
+                      value={confirmPin.slice(0, 4)}
+                      editable={!isLoading}
+                      onChangeText={(t) => {
+                        const sanitized = t.replace(/\D/g, '').slice(0, 4);
+                        setConfirmPin(sanitized);
+                        if (activeErrorField === 'confirmPin') setActiveErrorField(null);
+                        if (authErrorMessage) setAuthErrorMessage(null);
+                      }}
+                      keyboardType="number-pad"
+                      secureTextEntry={!showConfirmPin}
+                      maxLength={4}
+                      returnKeyType="done"
+                      onSubmitEditing={handlePhonePinAuth}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowConfirmPin(!showConfirmPin)}
+                      disabled={isLoading}
+                      style={styles.eyeIconBtn}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    >
+                      <Icon name={showConfirmPin ? 'eye' : 'eye-off'} size={18} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+                  {activeErrorField === 'confirmPin' && !!fieldErrorMessages.confirmPin && (
+                    <Text style={styles.fieldErrorText}>{fieldErrorMessages.confirmPin}</Text>
+                  )}
+                </View>
+              )}
+
+              {/* Submit Button */}
               <TouchableOpacity
-                style={[styles.primaryButton, (!fullName.trim() || phoneNumber.length < 10) && styles.buttonDisabled]}
-                onPress={handleSendOtp}
-                disabled={isLoading || !fullName.trim() || phoneNumber.length < 10}
-                activeOpacity={0.85}
+                style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+                onPress={handlePhonePinAuth}
+                disabled={isLoading}
+                activeOpacity={0.88}
               >
                 <LinearGradient
                   colors={['#10B981', '#059669']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.gradientButton}
+                  style={styles.submitGradient}
                 >
                   {isLoading ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator color="#FFFFFF" size="small" style={{ marginRight: 8 }} />
+                      <Text style={styles.submitText}>
+                        {authMode === 'signin' ? 'Signing In...' : 'Creating Account...'}
+                      </Text>
+                    </View>
                   ) : (
                     <>
-                      <Text style={styles.buttonText}>Get Verification Code</Text>
+                      <Text style={styles.submitText}>
+                        {authMode === 'signin' ? 'Sign In & Access' : 'Create Account'}
+                      </Text>
                       <Icon name="arrow-right" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
                     </>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
-            </View>
-          ) : (
-            /* STEP 2: 6-Digit OTP Verification */
-            <View style={styles.formContainer}>
-              {/* Dev Helper Banner */}
-              {devOtpHint && (
-                <View style={styles.devOtpBanner}>
-                  <Icon name="info" size={14} color="#047857" style={{ marginRight: 6 }} />
-                  <Text style={styles.devOtpText}>
-                    Development OTP: <Text style={{ fontWeight: '800' }}>{devOtpHint}</Text>
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      const split = devOtpHint.split('');
-                      setOtp(split);
-                      handleVerifyOtp(devOtpHint);
-                    }}
-                    style={styles.devFillBtn}
-                  >
-                    <Text style={styles.devFillBtnText}>Auto-Fill</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
 
-              {/* 6 Digit Input Boxes */}
-              <View style={styles.otpBoxesRow}>
-                {otp.map((digit, idx) => (
-                  <TextInput
-                    key={idx}
-                    ref={(ref) => {
-                      otpInputsRef.current[idx] = ref;
-                    }}
-                    style={[
-                      styles.otpBox,
-                      digit ? styles.otpBoxFilled : null,
-                    ]}
-                    value={digit}
-                    onChangeText={(text) => handleOtpChange(text, idx)}
-                    onKeyPress={(e) => handleOtpKeyPress(e, idx)}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    selectTextOnFocus
-                  />
-                ))}
-              </View>
-
-              {/* Verify Button */}
+              {/* Switch Mode Prompt */}
               <TouchableOpacity
-                style={[styles.primaryButton, otp.join('').length < 6 && styles.buttonDisabled]}
-                onPress={() => handleVerifyOtp()}
-                disabled={isLoading || otp.join('').length < 6}
-                activeOpacity={0.85}
+                onPress={() => handleTabChange(authMode === 'signin' ? 'register' : 'signin')}
+                disabled={isLoading}
+                style={[styles.switchModeRow, isLoading && { opacity: 0.5 }]}
+                activeOpacity={0.7}
               >
-                <LinearGradient
-                  colors={['#10B981', '#059669']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.gradientButton}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <>
-                      <Text style={styles.buttonText}>Verify & Sign In</Text>
-                      <Icon name="check" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
-                    </>
-                  )}
-                </LinearGradient>
+                <Text style={styles.switchModeText}>
+                  {authMode === 'signin' ? "Don't have an account? " : 'Already registered? '}
+                  <Text style={styles.switchModeHighlight}>
+                    {authMode === 'signin' ? 'Create New PIN' : 'Sign In with PIN'}
+                  </Text>
+                </Text>
               </TouchableOpacity>
-
-              {/* Resend and Edit options */}
-              <View style={styles.otpOptionsRow}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setStep('phone');
-                    setDevOtpHint(null);
-                  }}
-                  style={styles.editPhoneBtn}
-                >
-                  <Icon name="edit-2" size={14} color="#64748B" style={{ marginRight: 4 }} />
-                  <Text style={styles.editPhoneText}>Change Mobile Number</Text>
-                </TouchableOpacity>
-
-                {!isOtpComplete ? (
-                  <TouchableOpacity
-                    onPress={handleSendOtp}
-                    disabled={!canResend || isLoading}
-                    style={styles.resendBtn}
-                  >
-                    <Text style={[styles.resendText, canResend && styles.resendTextActive]}>
-                      {canResend ? 'Resend OTP' : `Resend in ${countdown}s`}
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.resendBtn}>
-                    <Text style={[styles.resendText, { color: '#10B981', fontWeight: '600' }]}>
-                      {isLoading ? 'Verifying...' : 'Code entered'}
-                    </Text>
-                  </View>
-                )}
-              </View>
             </View>
-          )}
+          </View>
 
           {/* Guest Exploration Option */}
-          <View style={styles.guestContainer}>
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
+          <View style={styles.guestSection}>
+            <View style={styles.orDividerRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>OR</Text>
+              <View style={styles.orLine} />
             </View>
             <TouchableOpacity
               onPress={handleContinueAsGuest}
-              style={styles.guestButton}
+              disabled={isLoading}
+              style={[styles.guestButton, isLoading && { opacity: 0.5 }]}
               activeOpacity={0.8}
             >
-              <Icon name="compass" size={16} color="#475569" style={{ marginRight: 6 }} />
-              <Text style={styles.guestButtonText}>Explore App as Guest</Text>
+              <Icon name="compass" size={16} color="#059669" style={{ marginRight: 8 }} />
+              <Text style={styles.guestButtonText}>Explore as Guest</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -392,86 +732,198 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAF9',
   },
   keyboardContainer: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 10,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 36,
   },
   headerImageContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 12,
+    marginTop: 4,
+    marginBottom: 2,
   },
   headerLeafImage: {
     width: 140,
-    height: 110,
+    height: 105,
   },
-  titleSection: {
+  headerSection: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 16,
   },
-  brandBadge: {
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.2,
+    borderColor: '#FECACA',
+    borderRadius: BorderRadius.lg,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#991B1B',
+    lineHeight: 18,
+  },
+  errorBannerAction: {
+    marginTop: 6,
+  },
+  errorBannerActionText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  appName: {
+    ...Typography.heading1,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#064E3B',
+    letterSpacing: -0.5,
+  },
+  appTagline: {
+    ...Typography.body,
+    fontSize: 13,
+    color: '#059669',
+    fontWeight: '600',
+    marginTop: 4,
+    letterSpacing: 0.2,
+  },
+  mainCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadow.md,
+  },
+  segmentedContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.xl,
+    padding: 4,
+    marginBottom: 18,
+  },
+  segmentTab: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: BorderRadius.full,
-    marginBottom: 10,
-    gap: 6,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: BorderRadius.lg,
   },
-  brandBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#166534',
-    letterSpacing: 0.5,
+  segmentTabActive: {
+    backgroundColor: '#FFFFFF',
+    ...Shadow.sm,
   },
-  mainTitle: {
-    ...Typography.heading2,
-    fontSize: 24,
+  tabDisabled: {
+    opacity: 0.5,
+  },
+  segmentText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  segmentTextActive: {
+    color: '#065F46',
+  },
+  cardHeader: {
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  cardTitle: {
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
-    textAlign: 'center',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
-  subtitle: {
-    ...Typography.body,
-    fontSize: 13.5,
+  cardSubtitle: {
+    fontSize: 12.5,
     color: '#64748B',
+    marginTop: 4,
     textAlign: 'center',
-    marginTop: 6,
-    paddingHorizontal: 12,
-    lineHeight: 20,
   },
-  formContainer: {
+  formFields: {
     width: '100%',
   },
   inputGroup: {
-    marginBottom: 18,
+    marginBottom: 14,
   },
   inputLabel: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#334155',
     marginBottom: 6,
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
-  inputFieldBox: {
+  labelWithHint: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  pinHint: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  matchBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  matchSuccess: {
+    backgroundColor: '#DCFCE7',
+    color: '#166534',
+  },
+  matchError: {
+    backgroundColor: '#FEE2E2',
+    color: '#991B1B',
+  },
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderWidth: 1.2,
     borderColor: '#E2E8F0',
     borderRadius: BorderRadius.xl,
-    paddingHorizontal: 14,
-    height: 52,
+    paddingHorizontal: 12,
+    height: 50,
   },
-  inputIcon: {
+  inputContainerDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.65,
+  },
+  inputErrorBorder: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FFF5F5',
+  },
+  inputSuccessBorder: {
+    borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
+  },
+  fieldErrorText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#DC2626',
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fieldIcon: {
     marginRight: 10,
   },
   textInput: {
@@ -480,174 +932,112 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontWeight: '600',
   },
-  phoneInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  inputDisabled: {
+    color: '#94A3B8',
+  },
+  pinInput: {
+    letterSpacing: 4,
+    fontSize: 18,
+    fontWeight: '800',
   },
   countryCodeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1.2,
-    borderColor: '#E2E8F0',
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: 12,
-    height: 52,
+    marginRight: 8,
     gap: 4,
   },
   flagEmoji: {
-    fontSize: 16,
+    fontSize: 15,
   },
   countryCodeText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13.5,
+    fontWeight: '800',
     color: '#1E293B',
   },
-  phoneNumberBox: {
-    flex: 1,
+  codeDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: '#CBD5E1',
+    marginLeft: 6,
   },
-  phoneHelperText: {
-    fontSize: 11.5,
-    color: '#94A3B8',
-    marginTop: 6,
-    marginLeft: 2,
+  eyeIconBtn: {
+    padding: 6,
   },
-  primaryButton: {
+  submitButton: {
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
-    marginTop: 10,
+    marginTop: 8,
     ...Shadow.md,
   },
-  buttonDisabled: {
+  submitButtonDisabled: {
     opacity: 0.55,
   },
-  gradientButton: {
+  submitGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     height: 52,
     paddingHorizontal: 20,
   },
-  buttonText: {
+  submitText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },
-  devOtpBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: BorderRadius.lg,
-    marginBottom: 18,
-  },
-  devOtpText: {
-    fontSize: 12,
-    color: '#065F46',
-    flex: 1,
-  },
-  devFillBtn: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  devFillBtnText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  otpBoxesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    gap: 8,
-  },
-  otpBox: {
-    flex: 1,
-    height: 54,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderRadius: BorderRadius.lg,
-    backgroundColor: '#F8FAFC',
-    textAlign: 'center',
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  otpBoxFilled: {
-    borderColor: '#10B981',
-    backgroundColor: '#ECFDF5',
-  },
-  otpOptionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  switchModeRow: {
     marginTop: 16,
-    paddingHorizontal: 4,
-  },
-  editPhoneBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 4,
   },
-  editPhoneText: {
+  switchModeText: {
     fontSize: 12.5,
     color: '#64748B',
-    fontWeight: '600',
+    fontWeight: '500',
   },
-  resendBtn: {
-    paddingVertical: 4,
-  },
-  resendText: {
-    fontSize: 12.5,
-    color: '#94A3B8',
-    fontWeight: '600',
-  },
-  resendTextActive: {
-    color: '#10B981',
+  switchModeHighlight: {
+    color: '#059669',
     fontWeight: '700',
   },
-  guestContainer: {
-    marginTop: 24,
+  guestSection: {
+    marginTop: 20,
     alignItems: 'center',
   },
-  dividerRow: {
+  orDividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  dividerLine: {
+  orLine: {
     flex: 1,
     height: 1,
     backgroundColor: '#E2E8F0',
   },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 12,
+  orText: {
+    marginHorizontal: 10,
+    fontSize: 11,
     color: '#94A3B8',
-    fontWeight: '500',
-    textTransform: 'uppercase',
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
   guestButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.2,
+    borderColor: '#A7F3D0',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: BorderRadius.xl,
     width: '100%',
+    ...Shadow.sm,
   },
   guestButtonText: {
     fontSize: 13.5,
     fontWeight: '700',
-    color: '#475569',
+    color: '#065F46',
   },
 });
 

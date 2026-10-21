@@ -13,6 +13,7 @@ export interface QuestItem {
   current: number;
   completed: boolean;
   xpReward: number;
+  habitId?: string;
 }
 
 interface QuestState {
@@ -26,6 +27,7 @@ interface QuestState {
     timestamp: string;
   };
   syncDailyQuests: (metrics: {
+    habits?: any[];
     waterGlasses: number;
     habitsDone: number;
     steps: number;
@@ -34,59 +36,127 @@ interface QuestState {
   claimMysteryChest: () => { xp: number; shieldAdded: boolean; message: string } | null;
   addStreakShield: (count?: number) => void;
   useStreakShield: () => boolean;
+  resetQuests: () => void;
 }
 
-const generateDailyQuests = (dateStr: string): QuestItem[] => [
-  {
-    id: `q-water-${dateStr}`,
-    title: 'Hydration Charge',
-    description: 'Drink at least 4 glasses of water today',
-    icon: 'droplet',
-    category: 'water',
-    target: 4,
-    current: 0,
-    completed: false,
-    xpReward: 30,
-  },
-  {
+export const generateDailyQuests = (dateStr: string, habitsList: any[] = []): QuestItem[] => {
+  if (!habitsList || habitsList.length === 0) {
+    return [
+      {
+        id: `q-starter-${dateStr}`,
+        title: 'Starter Momentum',
+        description: 'Add your first personal habit to begin your journey',
+        icon: 'plus-circle',
+        category: 'habits',
+        target: 1,
+        current: 0,
+        completed: false,
+        xpReward: 50,
+      },
+      {
+        id: `q-reflect-${dateStr}`,
+        title: 'Mindful Spark',
+        description: 'Write a journal reflection or walk 1,500 steps',
+        icon: 'zap',
+        category: 'activity',
+        target: 1,
+        current: 0,
+        completed: false,
+        xpReward: 35,
+      },
+    ];
+  }
+
+  const generated: QuestItem[] = [];
+
+  // Quest 1: Priority Habit
+  const primaryHabit = habitsList[0];
+  generated.push({
+    id: `q-focus-${dateStr}`,
+    title: `Focus: ${primaryHabit.name}`,
+    description: `Complete "${primaryHabit.name}" today`,
+    icon: primaryHabit.icon || 'check-circle',
+    category: 'habits',
+    habitId: primaryHabit.id,
+    target: 1,
+    current: primaryHabit.completed ? 1 : 0,
+    completed: Boolean(primaryHabit.completed),
+    xpReward: 35,
+  });
+
+  // Quest 2: Habit Consistency
+  const habitTarget = Math.min(habitsList.length, 2);
+  generated.push({
     id: `q-habits-${dateStr}`,
     title: 'Habit Mastery',
-    description: 'Complete at least 2 habits from your daily focus',
-    icon: 'check-circle',
+    description: `Complete ${habitTarget} of your personal habit${habitTarget > 1 ? 's' : ''}`,
+    icon: 'target',
     category: 'habits',
-    target: 2,
+    target: habitTarget,
     current: 0,
     completed: false,
     xpReward: 40,
-  },
-  {
-    id: `q-mind-${dateStr}`,
-    title: 'Mind & Movement',
-    description: 'Walk 3,000 steps or write a daily journal reflection',
-    icon: 'zap',
-    category: 'activity',
-    target: 1,
-    current: 0,
-    completed: false,
-    xpReward: 35,
-  },
-];
+  });
+
+  // Quest 3: Only add Hydration if the user tracks water, otherwise Mind & Movement
+  const hasWaterHabit = habitsList.some(
+    (h: any) =>
+      h.name?.toLowerCase().includes('water') ||
+      h.name?.toLowerCase().includes('hydrat') ||
+      h.category?.toLowerCase() === 'health'
+  );
+
+  if (hasWaterHabit) {
+    generated.push({
+      id: `q-water-${dateStr}`,
+      title: 'Hydration Target',
+      description: 'Drink at least 4 glasses of water today',
+      icon: 'droplet',
+      category: 'water',
+      target: 4,
+      current: 0,
+      completed: false,
+      xpReward: 30,
+    });
+  } else {
+    generated.push({
+      id: `q-mind-${dateStr}`,
+      title: 'Mind & Movement',
+      description: 'Walk 3,000 steps or write a daily journal reflection',
+      icon: 'zap',
+      category: 'activity',
+      target: 1,
+      current: 0,
+      completed: false,
+      xpReward: 35,
+    });
+  }
+
+  return generated;
+};
+
+export const getLocalTodayDateString = (d: Date = new Date()): string => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
 
 export const useQuestStore = create<QuestState>()(
   persist(
     (set, get) => ({
-      date: new Date().toISOString().split('T')[0],
-      quests: generateDailyQuests(new Date().toISOString().split('T')[0]),
+      date: getLocalTodayDateString(),
+      quests: [],
       chestClaimed: false,
       streakShields: 1, // Start with 1 complimentary shield
 
-      syncDailyQuests: ({ waterGlasses, habitsDone, steps, hasJournal }) => {
-        const todayStr = new Date().toISOString().split('T')[0];
+      syncDailyQuests: ({ habits = [], waterGlasses, habitsDone, steps, hasJournal }) => {
+        const todayStr = getLocalTodayDateString();
         let currentQuests = get().quests;
         let isNewDay = get().date !== todayStr;
 
         if (isNewDay || !currentQuests || currentQuests.length === 0) {
-          currentQuests = generateDailyQuests(todayStr);
+          currentQuests = generateDailyQuests(todayStr, habits);
           set({
             date: todayStr,
             quests: currentQuests,
@@ -98,7 +168,11 @@ export const useQuestStore = create<QuestState>()(
           let currentVal = 0;
           let isDone = false;
 
-          if (q.category === 'water') {
+          if (q.habitId) {
+            const h = habits.find((item: any) => item.id === q.habitId);
+            currentVal = h?.completed ? 1 : 0;
+            isDone = currentVal >= 1;
+          } else if (q.category === 'water') {
             currentVal = waterGlasses;
             isDone = currentVal >= q.target;
           } else if (q.category === 'habits') {
@@ -176,6 +250,17 @@ export const useQuestStore = create<QuestState>()(
           return true;
         }
         return false;
+      },
+
+      resetQuests: () => {
+        const todayStr = getLocalTodayDateString();
+        set({
+          date: todayStr,
+          quests: generateDailyQuests(todayStr, []),
+          chestClaimed: false,
+          streakShields: 1,
+          lastClaimedReward: undefined,
+        });
       },
     }),
     {

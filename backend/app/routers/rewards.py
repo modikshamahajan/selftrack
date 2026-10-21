@@ -58,9 +58,13 @@ async def get_badges(user: User = Depends(get_current_user), db: AsyncSession = 
 @router.get("/leaderboard", response_model=List[LeaderboardItem])
 async def get_leaderboard(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     # Query all users who have not chosen to hide from leaderboard
+    from sqlalchemy import or_
+    from app.models.models import UserSettings
+
     res = await db.execute(
         select(User)
-        .where(User.privacy_hide_leaderboard.is_(False))
+        .outerjoin(UserSettings, User.id == UserSettings.user_id)
+        .where(or_(UserSettings.privacy_hide_leaderboard.is_(False), UserSettings.privacy_hide_leaderboard.is_(None)))
         .order_by(desc(User.total_xp))
         .limit(20)
     )
@@ -91,7 +95,11 @@ async def get_leaderboard(user: User = Depends(get_current_user), db: AsyncSessi
         })
 
     # If current user opted out or not in top list, still provide their entry if wanted
-    if not current_user_included and not getattr(user, 'privacy_hide_leaderboard', False):
+    user_settings_res = await db.execute(select(UserSettings).where(UserSettings.user_id == user.id))
+    curr_settings = user_settings_res.scalar_one_or_none()
+    hide_leaderboard = curr_settings.privacy_hide_leaderboard if curr_settings else False
+
+    if not current_user_included and not hide_leaderboard:
         all_entries.append({
             "name": f"{user.name} (You)",
             "xp": user.total_xp or 0,

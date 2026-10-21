@@ -2,15 +2,16 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 
-import { useQuestStore } from '../useQuestStore';
+import { useQuestStore, getLocalTodayDateString } from '../useQuestStore';
 import { useFocusStore } from '../useFocusStore';
 import { useAuthStore } from '../useAuthStore';
 
 describe('Life Companion Stores: Quests and Focus', () => {
   beforeEach(() => {
     // Reset stores
+    const todayStr = getLocalTodayDateString();
     useQuestStore.setState({
-      date: '2026-10-16',
+      date: todayStr,
       quests: [
         {
           id: 'q-water-2026-10-16',

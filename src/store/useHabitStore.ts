@@ -17,7 +17,11 @@ export interface HabitItem {
   reminder_frequency?: 'daily' | 'interval' | 'weekly' | 'smart';
   reminder_time?: string;
   reminder_interval_hours?: number;
+  reminder_interval_unit?: 'hours' | 'minutes';
+  reminder_interval_value?: number;
+  reminder_weekly_days?: string[];
   reminder_days?: number[];
+  routine_type?: 'morning' | 'evening' | 'none';
 }
 
 interface HabitState {
@@ -31,9 +35,11 @@ interface HabitState {
   deleteHabit: (id: string) => Promise<void>;
   toggleHabit: (id: string, date?: string) => Promise<HabitItem>;
   claimRoutineReward: (routineType: string) => { alreadyClaimed: boolean; xpAwarded: number };
+  clearAllHabits: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'selftrack_habits';
+const DUMMY_HABIT_IDS = new Set(['habit_1', 'habit_2', 'habit_3', 'habit_4']);
 
 export const getLocalTodayDateString = (d: Date = new Date()): string => {
   const yyyy = d.getFullYear();
@@ -42,52 +48,7 @@ export const getLocalTodayDateString = (d: Date = new Date()): string => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const DEFAULT_HABITS: HabitItem[] = [
-  {
-    id: 'habit_1',
-    name: 'Drink 8 Glasses of Water',
-    icon: 'droplet',
-    color: '#3498DB',
-    category: 'Health',
-    streak_target: 7,
-    current_streak: 5,
-    completed: false,
-    completed_days: {},
-  },
-  {
-    id: 'habit_2',
-    name: 'Morning 20-min Walk',
-    icon: 'activity',
-    color: '#2ECC71',
-    category: 'Fitness',
-    streak_target: 10,
-    current_streak: 3,
-    completed: false,
-    completed_days: {},
-  },
-  {
-    id: 'habit_3',
-    name: 'Evening Reflection & Gratitude',
-    icon: 'book-open',
-    color: '#9B59B6',
-    category: 'Mindfulness',
-    streak_target: 7,
-    current_streak: 4,
-    completed: false,
-    completed_days: {},
-  },
-  {
-    id: 'habit_4',
-    name: 'Read 15 Pages',
-    icon: 'bookmark',
-    color: '#F39C12',
-    category: 'Productivity',
-    streak_target: 5,
-    current_streak: 2,
-    completed: false,
-    completed_days: {},
-  },
-];
+const DEFAULT_HABITS: HabitItem[] = [];
 
 const saveToStorage = async (habits: HabitItem[]) => {
   try {
@@ -96,7 +57,7 @@ const saveToStorage = async (habits: HabitItem[]) => {
 };
 
 export const useHabitStore = create<HabitState>((set, get) => ({
-  habits: DEFAULT_HABITS,
+  habits: [],
   isLoading: false,
   error: null,
   completedRoutines: {},
@@ -115,13 +76,17 @@ export const useHabitStore = create<HabitState>((set, get) => ({
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed: HabitItem[] = JSON.parse(stored);
-        const normalized = parsed.map((h) => ({
+        const filtered = Array.isArray(parsed) ? parsed.filter((h) => !DUMMY_HABIT_IDS.has(h.id)) : [];
+        const normalized = filtered.map((h) => ({
           ...h,
           completed: Boolean(h.completed_days?.[todayStr]),
         }));
         set({ habits: normalized });
+        if (Array.isArray(parsed) && parsed.length !== filtered.length) {
+          await saveToStorage(filtered);
+        }
       } else {
-        await saveToStorage(DEFAULT_HABITS);
+        await saveToStorage([]);
       }
     } catch (e) {}
 
@@ -294,5 +259,13 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     } catch (e) {}
 
     return { alreadyClaimed: false, xpAwarded: 50 };
+  },
+
+  clearAllHabits: async () => {
+    set({ habits: [], completedRoutines: {} });
+    await saveToStorage([]);
+    try {
+      await AsyncStorage.removeItem('selftrack_completed_routines');
+    } catch (e) {}
   },
 }));

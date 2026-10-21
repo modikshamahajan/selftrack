@@ -36,12 +36,18 @@ interface SpecialEventState {
     occasions: number;
     upcomingNext7Days: number;
   };
+  clearAllEvents: () => Promise<void>;
 }
 
 export const useSpecialEventStore = create<SpecialEventState>((set, get) => ({
   events: [],
   isLoading: false,
   selectedFilter: 'all',
+
+  clearAllEvents: async () => {
+    set({ events: [] });
+    await saveAllSpecialEvents([]);
+  },
 
   loadEvents: async () => {
     set({ isLoading: true });

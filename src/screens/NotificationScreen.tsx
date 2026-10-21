@@ -35,59 +35,6 @@ import {
   getNextOccurrenceDate,
 } from '../services/specialEvents';
 
-const DEFAULT_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: '1',
-    icon: 'gift',
-    color: '#EC4899',
-    title: 'Birthday Reminder',
-    message: "Mom's Birthday is coming up in 3 days! Plan gifts & warm wishes 🎂",
-    category: 'birthday',
-    time: '10 min ago',
-    read: false,
-  },
-  {
-    id: '2',
-    icon: 'briefcase',
-    color: '#2563EB',
-    title: 'Strategy Meeting',
-    message: 'Product Strategy & Roadmap Sync starts tomorrow at 02:30 PM 💼',
-    category: 'meeting',
-    time: '1h ago',
-    read: false,
-  },
-  {
-    id: '3',
-    icon: 'bell',
-    color: Colors.primary,
-    title: 'Habit Reminder',
-    message: 'Time for your evening meditation! Keep your streak alive 🔥',
-    category: 'habit',
-    time: '2h ago',
-    read: false,
-  },
-  {
-    id: '4',
-    icon: 'heart',
-    color: '#E11D48',
-    title: 'Anniversary Milestone',
-    message: 'Happy 3rd Work Anniversary! Cheers to growth and resilience 💍✨',
-    category: 'anniversary',
-    time: '4h ago',
-    read: true,
-  },
-  {
-    id: '5',
-    icon: 'star',
-    color: '#8B5CF6',
-    title: 'Special Occasion',
-    message: 'Annual Tech & Wellness Gala invitation is confirmed for next week 🎉',
-    category: 'occasion',
-    time: 'Yesterday',
-    read: true,
-  },
-];
-
 type MainTab = 'inbox' | 'events';
 
 const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
@@ -139,7 +86,7 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
     setRefreshing(false);
   };
 
-  const displayNotifications = notifications.length > 0 ? notifications : DEFAULT_NOTIFICATIONS;
+  const displayNotifications = notifications;
 
   // Filtered Notifications for Inbox
   const filteredNotifications = useMemo(() => {
@@ -157,8 +104,13 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
     );
   }, [displayNotifications, inboxFilter]);
 
-  const stats = getStats();
-  const filteredEventsList = getFilteredEvents();
+  const unreadCount = useMemo(
+    () => displayNotifications.filter((n) => !n.read).length,
+    [displayNotifications]
+  );
+
+  const stats = useMemo(() => getStats(), [events, getStats]);
+  const filteredEventsList = useMemo(() => getFilteredEvents(), [events, selectedFilter, getFilteredEvents]);
 
   // Highlighted event (today or upcoming in next 3 days)
   const spotlightEvent = useMemo(() => {
@@ -212,7 +164,7 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
 
   const handleTestSms = async (event: SpecialEvent) => {
     await triggerTestSms(event);
-    setTestSuccessMessage(`Automated 2x phone alerts simulated for "${event.title}"! 🔔🎉`);
+    setTestSuccessMessage(`Realtime SMS alert triggered for "${event.title}"! 💬📱`);
     setTimeout(() => {
       setTestSuccessMessage(null);
     }, 3500);
@@ -269,6 +221,11 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
           <Text style={[styles.segmentText, activeTab === 'inbox' && styles.segmentTextActive]}>
             Activity Inbox
           </Text>
+          {unreadCount > 0 ? (
+            <View style={styles.badgeCount}>
+              <Text style={styles.badgeCountText}>{unreadCount}</Text>
+            </View>
+          ) : null}
         </TouchableOpacity>
 
         <TouchableOpacity

@@ -80,6 +80,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       fetchJournalEntries();
       fetchRewards();
       loadSpecialEvents();
+      useHealthStore.getState().syncDevicePedometer();
       api.get('/ai/widget-tip')
         .then((res) => {
           if (res.data?.message) setAiTip(res.data.message);
@@ -111,23 +112,36 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const totalXP = user?.total_xp || 0;
   const currentXP = totalXP % 1000;
   const level = user?.level || Math.floor(totalXP / 1000) + 1;
-  const streak = user?.streak_count || 3;
+  const streak = user?.streak_count ?? 0;
 
   // Accurate Habit Completion Check for Today
-  const isHabitCompletedToday = (h: any): boolean => {
+  const isHabitCompletedToday = useCallback((h: any): boolean => {
     if (!h) return false;
     return Boolean(h.completed_days?.[localToday] || h.completed_days?.[utcToday] || h.completed);
-  };
+  }, [localToday, utcToday]);
 
-  const habitsDone = habits.filter(isHabitCompletedToday).length;
-  const habitsPercent = habits.length > 0 ? Math.round((habitsDone / habits.length) * 100) : 0;
+  const { habitsDone, habitsPercent } = useMemo(() => {
+    const done = habits.filter(isHabitCompletedToday).length;
+    const percent = habits.length > 0 ? Math.round((done / habits.length) * 100) : 0;
+    return { habitsDone: done, habitsPercent: percent };
+  }, [habits, isHabitCompletedToday]);
 
-  const todayFoodLogs = foodLogs.filter(
-    (f) => f.date === localToday || f.date === utcToday || f.date?.startsWith(localToday) || f.date?.startsWith(utcToday)
+  const { todayFoodLogs, todayCalories, foodRatio } = useMemo(() => {
+    const logs = foodLogs.filter(
+      (f) => f.date === localToday || f.date === utcToday || f.date?.startsWith(localToday) || f.date?.startsWith(utcToday)
+    );
+    const calories = logs.reduce((sum, f) => sum + (f.calories * (f.qty || 1)), 0);
+    const ratio = Math.min(1, logs.length / 3);
+    return { todayFoodLogs: logs, todayCalories: calories, foodRatio: ratio };
+  }, [foodLogs, localToday, utcToday]);
+
+  const hasJournalToday = useMemo(
+    () => journalEntries.some((e) => e.date === localToday || e.date === utcToday),
+    [journalEntries, localToday, utcToday]
   );
-  const todayCalories = todayFoodLogs.reduce((sum, f) => sum + (f.calories * (f.qty || 1)), 0);
+  const journalPercent = hasJournalToday ? 100 : (journalEntries.length > 0 ? 50 : 0);
 
-  // Composite Health Progress: Hydration (35%) + Nutrition (35%) + Activity/Steps (30%)
+  // Composite Health & Vitality Score memoized
   const isMetricsToday = metrics?.date === localToday || metrics?.date === utcToday || !metrics?.date;
   const waterTarget = metrics?.water_goal || 8;
   const waterCurrent = isMetricsToday ? (metrics?.water_glasses || 0) : 0;
@@ -137,26 +151,26 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const stepCurrent = isMetricsToday ? (metrics?.steps || 0) : 0;
   const stepRatio = Math.min(1, stepCurrent / stepTarget);
 
-  // Food ratio: target is logging at least 3 meals/snacks
-  const foodRatio = Math.min(1, todayFoodLogs.length / 3);
+  const { healthScore, healthPercent, vitalityScore } = useMemo(() => {
+    if (waterCurrent === 0 && habitsDone === 0 && stepCurrent === 0 && foodLogs.length === 0 && !hasJournalToday) {
+      return { healthScore: 0, healthPercent: 0, vitalityScore: 0 };
+    }
 
-  const healthScore = (waterRatio * 0.35) + (foodRatio * 0.35) + (stepRatio * 0.30);
-  const healthPercent = Math.min(100, Math.round(healthScore * 100));
+    const hScore = (waterRatio * 0.35) + (foodRatio * 0.35) + (stepRatio * 0.30);
+    const hPercent = Math.min(100, Math.round(hScore * 100));
 
-  const hasJournalToday = journalEntries.some((e) => e.date === localToday || e.date === utcToday);
-  const journalPercent = hasJournalToday ? 100 : (journalEntries.length > 0 ? 50 : 0);
-
-  // Holistic Vitality Score: Hydration (30%) + Habits (35%) + Activity (20%) + Mind/Fuel (15%)
-  const habitsRatio = habits.length > 0 ? (habitsDone / habits.length) : 0.8;
-  const vitalityScore = Math.min(
-    100,
-    Math.round(
-      waterRatio * 30 +
-      habitsRatio * 35 +
-      stepRatio * 20 +
-      ((hasJournalToday ? 1 : 0) * 0.5 + foodRatio * 0.5) * 15
-    )
-  );
+    const habitsRatio = habits.length > 0 ? (habitsDone / habits.length) : 0;
+    const vScore = Math.min(
+      100,
+      Math.round(
+        waterRatio * 30 +
+        habitsRatio * 35 +
+        stepRatio * 20 +
+        ((hasJournalToday ? 1 : 0) * 0.5 + foodRatio * 0.5) * 15
+      )
+    );
+    return { healthScore: hScore, healthPercent: hPercent, vitalityScore: vScore };
+  }, [waterRatio, foodRatio, stepRatio, habits.length, habitsDone, hasJournalToday, waterCurrent, stepCurrent, foodLogs.length]);
 
   const getVitalityMeta = (score: number) => {
     if (score >= 85) return { label: 'Peak Vitality ✨', color: '#10B981', bg: '#ECFDF5', subtitle: 'You are thriving today! Great consistency.' };
@@ -173,12 +187,13 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   useEffect(() => {
     syncDailyQuests({
+      habits,
       waterGlasses: waterCurrent,
       habitsDone,
       steps: stepCurrent,
       hasJournal: hasJournalToday,
     });
-  }, [waterCurrent, habitsDone, stepCurrent, hasJournalToday]);
+  }, [habits, waterCurrent, habitsDone, stepCurrent, hasJournalToday]);
 
   const handleOpenChest = () => {
     const res = claimMysteryChest();
@@ -188,9 +203,9 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     }
   };
 
-  const completedQuestsCount = quests.filter((q) => q.completed).length;
+  const completedQuestsCount = useMemo(() => quests.filter((q) => q.completed).length, [quests]);
 
-  const displayHabits = habits.slice(0, 3);
+  const displayHabits = useMemo(() => habits.slice(0, 3), [habits]);
 
   const getValidBadgeIcon = (iconName: string) => {
     if (!iconName) return 'award';
@@ -204,23 +219,21 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     return 'award';
   };
 
-  const defaultBadges = [
-    { id: 'b1', name: 'Early Bird', icon: 'sunrise', color: '#F59E0B', isNew: true },
-    { id: 'b2', name: '7-Day Streak', icon: 'zap', color: '#8B5CF6', isNew: false },
-    { id: 'b3', name: 'Goal Crusher', icon: 'target', color: '#10B981', isNew: false },
-  ];
+  const unlockedBadges = useMemo(
+    () => badges.filter((b) => b.is_unlocked).map((b) => ({
+      id: b.id.toString(),
+      name: b.title,
+      icon: getValidBadgeIcon(b.image_name),
+      color: '#F59E0B',
+      isNew: false
+    })),
+    [badges]
+  );
 
-  const unlockedBadges = badges.filter((b) => b.is_unlocked).map(b => ({
-    id: b.id.toString(),
-    name: b.title,
-    icon: getValidBadgeIcon(b.image_name),
-    color: '#F59E0B',
-    isNew: false
-  }));
-
-  const recentBadges = unlockedBadges.length >= 3
-    ? unlockedBadges.slice(0, 3)
-    : [...unlockedBadges, ...defaultBadges].slice(0, 3);
+  const recentBadges = useMemo(
+    () => unlockedBadges.slice(0, 3),
+    [unlockedBadges]
+  );
 
   // Nearest / Today's Special Event Celebration
   const todayCelebrationEvent = useMemo(() => {
@@ -783,7 +796,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               <LinearGradient colors={['#EDE9FE', '#DDD6FE']} style={styles.vitalIconWrap}>
                 <Ionicons name="moon" size={20} color="#7C3AED" />
               </LinearGradient>
-              <Text style={styles.vitalValue}>{metrics?.sleep_hours ? `${metrics.sleep_hours}h` : '7.5h'}</Text>
+              <Text style={styles.vitalValue}>{metrics?.sleep_hours && metrics.sleep_hours > 0 ? `${metrics.sleep_hours}h` : '0h'}</Text>
               <Text style={styles.vitalLabel}>Sleep Duration</Text>
             </TouchableOpacity>
 
@@ -825,37 +838,55 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               <Text style={styles.seeAllText}>Leaderboard →</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.badgesRow}>
-            {recentBadges.map((badge) => {
-              const isNew = badge.isNew;
-              return (
-                <TouchableOpacity
-                  key={badge.id}
-                  style={{ flex: 1 }}
-                  activeOpacity={0.8}
-                  onPress={() => navigation.navigate('Rewards')}
-                >
-                  <Card style={styles.badgeTile}>
-                    {isNew ? (
-                      <Animated.View style={[styles.badgeIconWrapper, { backgroundColor: `${badge.color}25` }, pulsingBadgeStyle]}>
-                        <Icon name={badge.icon as any} size={26} color={badge.color} />
-                      </Animated.View>
-                    ) : (
-                      <View style={[styles.badgeIconWrapper, { backgroundColor: `${badge.color}18` }]}>
-                        <Icon name={badge.icon as any} size={26} color={badge.color} />
-                      </View>
-                    )}
-                    <Text style={styles.badgeName} numberOfLines={1}>{badge.name}</Text>
-                    {isNew && (
-                      <View style={styles.badgeNewTag}>
-                        <Text style={styles.badgeNewTagText}>NEW</Text>
-                      </View>
-                    )}
-                  </Card>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {recentBadges.length > 0 ? (
+            <View style={styles.badgesRow}>
+              {recentBadges.map((badge) => {
+                const isNew = badge.isNew;
+                return (
+                  <TouchableOpacity
+                    key={badge.id}
+                    style={{ flex: 1 }}
+                    activeOpacity={0.8}
+                    onPress={() => navigation.navigate('Rewards')}
+                  >
+                    <Card style={styles.badgeTile}>
+                      {isNew ? (
+                        <Animated.View style={[styles.badgeIconWrapper, { backgroundColor: `${badge.color}25` }, pulsingBadgeStyle]}>
+                          <Icon name={badge.icon as any} size={26} color={badge.color} />
+                        </Animated.View>
+                      ) : (
+                        <View style={[styles.badgeIconWrapper, { backgroundColor: `${badge.color}18` }]}>
+                          <Icon name={badge.icon as any} size={26} color={badge.color} />
+                        </View>
+                      )}
+                      <Text style={styles.badgeName} numberOfLines={1}>{badge.name}</Text>
+                      {isNew && (
+                        <View style={styles.badgeNewTag}>
+                          <Text style={styles.badgeNewTagText}>NEW</Text>
+                        </View>
+                      )}
+                    </Card>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : (
+            <Card style={[styles.emptyCard, { paddingVertical: 18, marginTop: 4 }]}>
+              <View style={[styles.emptyIconCircle, { backgroundColor: '#FEF3C7', width: 44, height: 44, borderRadius: 22, marginBottom: 8 }]}>
+                <Icon name="award" size={22} color="#D97706" />
+              </View>
+              <Text style={[styles.emptyTitle, { fontSize: 15 }]}>No Trophies Unlocked Yet</Text>
+              <Text style={[styles.emptySubtitle, { marginBottom: 12, fontSize: 12 }]}>
+                Complete daily quests and maintain habit streaks to earn your badges!
+              </Text>
+              <TouchableOpacity
+                style={[styles.emptyAddBtn, { backgroundColor: '#8B5CF6', paddingHorizontal: 16, paddingVertical: 8 }]}
+                onPress={() => navigation.navigate('Rewards')}
+              >
+                <Text style={styles.emptyAddBtnText}>View Badges & Rewards →</Text>
+              </TouchableOpacity>
+            </Card>
+          )}
         </Animated.View>
 
         {/* WOMEN'S HEALTH - CYCLE STATUS WIDGET */}

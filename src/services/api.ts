@@ -29,7 +29,7 @@ const api = axios.create({
     'Content-Type': 'application/json',
     'Bypass-Tunnel-Reminder': 'true',
   },
-  timeout: 15000,
+  timeout: 4000,
 });
 
 // Allow dynamic update of base URL (e.g. for physical phone testing on LAN)

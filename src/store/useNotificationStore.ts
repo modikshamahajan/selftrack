@@ -18,11 +18,14 @@ interface NotificationState {
   fetchNotifications: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  clearNotifications: () => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   isLoading: false,
+
+  clearNotifications: () => set({ notifications: [] }),
 
   fetchNotifications: async () => {
     set({ isLoading: true });

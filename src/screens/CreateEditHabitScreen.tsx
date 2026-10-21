@@ -101,6 +101,20 @@ const CreateEditHabitScreen = () => {
     const [reminderIntervalHours, setReminderIntervalHours] = useState(
         existingHabit?.reminder_interval_hours ?? 3
     );
+    const [reminderIntervalUnit, setReminderIntervalUnit] = useState<'hours' | 'minutes'>(
+        existingHabit?.reminder_interval_unit ?? 'hours'
+    );
+    const [reminderIntervalValue, setReminderIntervalValue] = useState<number>(
+        existingHabit?.reminder_interval_value ?? (existingHabit?.reminder_interval_hours ?? 3)
+    );
+    const [selectedWeeklyDays, setSelectedWeeklyDays] = useState<string[]>(
+        existingHabit?.reminder_weekly_days && existingHabit.reminder_weekly_days.length > 0
+            ? existingHabit.reminder_weekly_days
+            : ['Mon', 'Wed', 'Fri']
+    );
+    const [routineType, setRoutineType] = useState<'morning' | 'evening' | 'none'>(
+        existingHabit?.routine_type ?? 'none'
+    );
 
     const isDoneDisabled = !title.trim();
 
@@ -113,6 +127,10 @@ const CreateEditHabitScreen = () => {
         if (!title.trim()) {
             return Alert.alert('Habit name required', 'Please enter a habit title before saving.');
         }
+
+        const calculatedIntervalHours = reminderIntervalUnit === 'hours'
+            ? reminderIntervalValue
+            : Math.max(1, Math.round(reminderIntervalValue / 60));
 
         const habitPayload = {
             id: existingHabit?.id ?? Date.now().toString(),
@@ -128,7 +146,11 @@ const CreateEditHabitScreen = () => {
             reminder_enabled: reminderEnabled,
             reminder_frequency: reminderFreq,
             reminder_time: reminderTime,
-            reminder_interval_hours: reminderIntervalHours,
+            reminder_interval_hours: calculatedIntervalHours,
+            reminder_interval_unit: reminderIntervalUnit,
+            reminder_interval_value: reminderIntervalValue,
+            reminder_weekly_days: selectedWeeklyDays,
+            routine_type: routineType,
         };
 
         try {
@@ -142,7 +164,11 @@ const CreateEditHabitScreen = () => {
                 reminder_enabled: reminderEnabled,
                 reminder_frequency: reminderFreq,
                 reminder_time: reminderTime,
-                reminder_interval_hours: reminderIntervalHours,
+                reminder_interval_hours: calculatedIntervalHours,
+                reminder_interval_unit: reminderIntervalUnit,
+                reminder_interval_value: reminderIntervalValue,
+                reminder_weekly_days: selectedWeeklyDays,
+                routine_type: routineType,
               });
             } else {
               await useHabitStore.getState().addHabit({
@@ -154,7 +180,11 @@ const CreateEditHabitScreen = () => {
                 reminder_enabled: reminderEnabled,
                 reminder_frequency: reminderFreq,
                 reminder_time: reminderTime,
-                reminder_interval_hours: reminderIntervalHours,
+                reminder_interval_hours: calculatedIntervalHours,
+                reminder_interval_unit: reminderIntervalUnit,
+                reminder_interval_value: reminderIntervalValue,
+                reminder_weekly_days: selectedWeeklyDays,
+                routine_type: routineType,
               });
             }
 
@@ -215,7 +245,7 @@ const CreateEditHabitScreen = () => {
                                 {reminderEnabled && (
                                     <View style={[styles.previewTargetBadge, { backgroundColor: 'rgba(255, 255, 255, 0.35)' }]}>
                                         <Text style={styles.previewTargetText}>
-                                            🔔 {reminderFreq === 'smart' ? 'AI' : reminderFreq === 'interval' ? `${reminderIntervalHours}h` : reminderTime.split(' ')[0]}
+                                            🔔 {reminderFreq === 'smart' ? 'AI' : reminderFreq === 'interval' ? `${reminderIntervalValue}${reminderIntervalUnit === 'hours' ? 'h' : 'm'}` : reminderFreq === 'weekly' ? `${selectedWeeklyDays.length}d/wk` : reminderTime.split(' ')[0]}
                                         </Text>
                                     </View>
                                 )}
@@ -546,34 +576,127 @@ const CreateEditHabitScreen = () => {
 
                                 {reminderFreq === 'interval' && (
                                     <View style={styles.freqDetailCard}>
-                                        <Text style={styles.freqDetailLabel}>Interval Window (Between 9 AM - 9 PM)</Text>
-                                        <View style={styles.timePickerRow}>
-                                            {[2, 3, 4, 6].map((hrs) => (
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                            <Text style={styles.freqDetailLabel}>Interval Window (Between 9 AM - 9 PM)</Text>
+                                            <View style={{ flexDirection: 'row', backgroundColor: '#E2E8F0', borderRadius: 8, padding: 2 }}>
                                                 <TouchableOpacity
-                                                    key={hrs}
-                                                    style={[styles.timeChip, reminderIntervalHours === hrs && styles.timeChipActive]}
-                                                    onPress={() => setReminderIntervalHours(hrs)}
+                                                    style={[styles.unitToggleBtn, reminderIntervalUnit === 'hours' && styles.unitToggleBtnActive]}
+                                                    onPress={() => {
+                                                        setReminderIntervalUnit('hours');
+                                                        setReminderIntervalValue(3);
+                                                    }}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <Text style={[styles.unitToggleText, reminderIntervalUnit === 'hours' && styles.unitToggleTextActive]}>Hours</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    style={[styles.unitToggleBtn, reminderIntervalUnit === 'minutes' && styles.unitToggleBtnActive]}
+                                                    onPress={() => {
+                                                        setReminderIntervalUnit('minutes');
+                                                        setReminderIntervalValue(30);
+                                                    }}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <Text style={[styles.unitToggleText, reminderIntervalUnit === 'minutes' && styles.unitToggleTextActive]}>Minutes</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+
+                                        <View style={styles.timePickerRow}>
+                                            {(reminderIntervalUnit === 'hours' ? [1, 2, 3, 4, 6] : [15, 30, 45, 60, 90]).map((val) => (
+                                                <TouchableOpacity
+                                                    key={val}
+                                                    style={[styles.timeChip, reminderIntervalValue === val && styles.timeChipActive]}
+                                                    onPress={() => setReminderIntervalValue(val)}
                                                     activeOpacity={0.75}
                                                 >
-                                                    <Text style={[styles.timeChipText, reminderIntervalHours === hrs && styles.timeChipTextActive]}>
-                                                        Every {hrs} hrs
+                                                    <Text style={[styles.timeChipText, reminderIntervalValue === val && styles.timeChipTextActive]}>
+                                                        Every {val} {reminderIntervalUnit === 'hours' ? (val === 1 ? 'hr' : 'hrs') : 'min'}
                                                     </Text>
                                                 </TouchableOpacity>
                                             ))}
+                                        </View>
+
+                                        {/* Custom interval numeric input */}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingHorizontal: 4 }}>
+                                            <Text style={{ fontSize: 13, color: '#64748B', marginRight: 8, fontWeight: '500' }}>Custom value:</Text>
+                                            <TextInput
+                                                style={{
+                                                    backgroundColor: '#FFF',
+                                                    borderWidth: 1,
+                                                    borderColor: '#CBD5E1',
+                                                    borderRadius: 8,
+                                                    paddingHorizontal: 10,
+                                                    paddingVertical: 4,
+                                                    fontSize: 13,
+                                                    width: 65,
+                                                    textAlign: 'center',
+                                                    color: '#1E293B',
+                                                    fontWeight: '700'
+                                                }}
+                                                keyboardType="numeric"
+                                                value={String(reminderIntervalValue)}
+                                                onChangeText={(txt) => {
+                                                    const clean = txt.replace(/[^0-9]/g, '');
+                                                    const parsed = parseInt(clean, 10);
+                                                    if (!isNaN(parsed) && parsed > 0) {
+                                                        setReminderIntervalValue(parsed);
+                                                    } else if (clean === '') {
+                                                        setReminderIntervalValue(1);
+                                                    }
+                                                }}
+                                            />
+                                            <Text style={{ fontSize: 13, color: '#334155', marginLeft: 8, fontWeight: '600' }}>
+                                                {reminderIntervalUnit}
+                                            </Text>
                                         </View>
                                     </View>
                                 )}
 
                                 {reminderFreq === 'weekly' && (
                                     <View style={styles.freqDetailCard}>
-                                        <Text style={styles.freqDetailLabel}>Target Routine Days</Text>
-                                        <View style={styles.timePickerRow}>
-                                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-                                                <View key={day} style={[styles.timeChip, styles.timeChipActive]}>
-                                                    <Text style={styles.timeChipTextActive}>{day}</Text>
-                                                </View>
-                                            ))}
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                            <Text style={styles.freqDetailLabel}>Target Routine Days</Text>
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    if (selectedWeeklyDays.length === 7) {
+                                                        setSelectedWeeklyDays(['Mon', 'Wed', 'Fri']);
+                                                    } else {
+                                                        setSelectedWeeklyDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+                                                    }
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 12, color: '#4F46E5', fontWeight: '700' }}>
+                                                    {selectedWeeklyDays.length === 7 ? 'Select Few' : 'Select All'}
+                                                </Text>
+                                            </TouchableOpacity>
                                         </View>
+                                        <View style={styles.timePickerRow}>
+                                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => {
+                                                const isSelected = selectedWeeklyDays.includes(day);
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={day}
+                                                        style={[styles.timeChip, isSelected && styles.timeChipActive]}
+                                                        activeOpacity={0.7}
+                                                        onPress={() => {
+                                                            if (isSelected) {
+                                                                if (selectedWeeklyDays.length > 1) {
+                                                                    setSelectedWeeklyDays(selectedWeeklyDays.filter((d) => d !== day));
+                                                                }
+                                                            } else {
+                                                                setSelectedWeeklyDays([...selectedWeeklyDays, day]);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Text style={[styles.timeChipText, isSelected && styles.timeChipTextActive]}>{day}</Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                        <Text style={{ fontSize: 12, color: '#64748B', marginTop: 8 }}>
+                                            Active on: <Text style={{ fontWeight: '700', color: '#059669' }}>{selectedWeeklyDays.join(', ')}</Text>
+                                        </Text>
                                     </View>
                                 )}
 
@@ -1201,6 +1324,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#15803D',
     lineHeight: 17,
+  },
+  unitToggleBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  unitToggleBtnActive: {
+    backgroundColor: '#059669',
+  },
+  unitToggleText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  unitToggleTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });
 

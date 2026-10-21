@@ -23,6 +23,7 @@ interface AuthState {
   initializeAuth: () => Promise<boolean>;
   sendOtp: (phone: string, name?: string) => Promise<{ status: string; message: string; dev_otp?: string }>;
   loginWithOtp: (phone: string, otp: string, name?: string) => Promise<UserProfile>;
+  loginWithPhonePin: (name: string, phone: string, pin: string, isRegistration?: boolean) => Promise<UserProfile>;
   login: (email: string, password: string) => Promise<UserProfile>;
   register: (name: string, email: string, password: string, interests?: string[], goals?: string[]) => Promise<UserProfile>;
   logout: () => Promise<void>;
@@ -31,98 +32,87 @@ interface AuthState {
   updateProfile: (updates: { name?: string; avatar_url?: string }) => Promise<UserProfile>;
   continueAsGuest: () => Promise<UserProfile>;
   setUser: (user: UserProfile | null) => void;
+  setToken: (token: string | null) => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const resetAppDataForNewUser = async () => {
+  const keysToRemove = [
+    'selftrack_habits',
+    'selftrack_completed_routines',
+    'selftrack_journals',
+    'health-storage',
+    'quest-storage',
+    '@selftrack_special_events_v2',
+    'scheduled_reminders',
+    '@selftrack_menstrual_data',
+  ];
+  try {
+    await AsyncStorage.multiRemove(keysToRemove);
+  } catch (_e) { }
+
+  try {
+    const { useHabitStore } = await import('./useHabitStore');
+    await useHabitStore.getState().clearAllHabits();
+  } catch (_e) { }
+
+  try {
+    const { useJournalStore } = await import('./useJournalStore');
+    await useJournalStore.getState().clearAllEntries();
+  } catch (_e) { }
+
+  try {
+    const { useHealthStore } = await import('./useHealthStore');
+    useHealthStore.getState().resetHealthState();
+  } catch (_e) { }
+
+  try {
+    const { useQuestStore } = await import('./useQuestStore');
+    useQuestStore.getState().resetQuests();
+  } catch (_e) { }
+
+  try {
+    const { useNotificationStore } = await import('./useNotificationStore');
+    useNotificationStore.getState().clearNotifications();
+  } catch (_e) { }
+
+  try {
+    const { useSpecialEventStore } = await import('./useSpecialEventStore');
+    await useSpecialEventStore.getState().clearAllEvents();
+  } catch (_e) { }
+};
+
+export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   token: null,
+  isLoading: false,
   isAuthenticated: false,
-  isLoading: true,
 
+  setUser: (user) => set({ user, isAuthenticated: !!user }),
+  setToken: (token) => set({ token }),
+
+  // Hydrate user session from AsyncStorage on app launch
   initializeAuth: async () => {
     set({ isLoading: true });
     try {
-      const token = await AsyncStorage.getItem('userToken');
-      const savedProfile = await AsyncStorage.getItem('userProfile');
-      
-      if (!token) {
-        set({ user: null, token: null, isAuthenticated: false, isLoading: false });
-        return false;
-      }
+      const [token, userProfileRaw] = await AsyncStorage.multiGet(['userToken', 'userProfile']);
+      const storedToken = token[1];
+      const storedUser = userProfileRaw[1] ? JSON.parse(userProfileRaw[1]) : null;
 
-      if (savedProfile) {
-        try {
-          const parsed = JSON.parse(savedProfile);
-          set({ user: parsed, token, isAuthenticated: true, isLoading: false });
-
-          // Refresh profile in background without delaying splash transition
-          if (token !== 'local_guest_token') {
-            api.get('/auth/me').then(async (res) => {
-              if (res.data) {
-                await AsyncStorage.setItem('userProfile', JSON.stringify(res.data));
-                set({ user: res.data });
-              }
-            }).catch((err) => {
-              if (err.response?.status === 401) {
-                AsyncStorage.multiRemove(['userToken', 'refreshToken', 'userProfile']);
-                set({ user: null, token: null, isAuthenticated: false });
-              }
-            });
-          }
-
-          return true;
-        } catch {}
-      }
-
-      // If guest mode, keep local session without network verification
-      if (token === 'local_guest_token') {
-        set({ isLoading: false, isAuthenticated: true });
+      if (storedToken && storedUser) {
+        set({ user: storedUser, token: storedToken, isAuthenticated: true, isLoading: false });
         return true;
       }
-
-      // If no local profile cached, fetch from backend with 1.5s timeout
-      try {
-        const res = (await Promise.race([
-          api.get('/auth/me'),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500)),
-        ])) as any;
-
-        if (res?.data) {
-          await AsyncStorage.setItem('userProfile', JSON.stringify(res.data));
-          set({ user: res.data, token, isAuthenticated: true, isLoading: false });
-          return true;
-        }
-      } catch (err: any) {
-        if (err.response?.status === 401) {
-          await AsyncStorage.multiRemove(['userToken', 'refreshToken', 'userProfile']);
-          set({ user: null, token: null, isAuthenticated: false, isLoading: false });
-          return false;
-        }
-      }
-
-      set({ isLoading: false });
-      return true;
-    } catch {
+      set({ user: null, token: null, isAuthenticated: false, isLoading: false });
+      return false;
+    } catch (_err) {
       set({ user: null, token: null, isAuthenticated: false, isLoading: false });
       return false;
     }
   },
 
   sendOtp: async (phone: string, name?: string) => {
-    try {
-      const res = await api.post('/auth/send-otp', { phone, name });
-      return res.data;
-    } catch (error: any) {
-      // If backend is unreachable over LAN during Expo Go testing, provide seamless demo fallback
-      if (!error.response || error.message?.includes('Network') || error.code === 'ERR_NETWORK') {
-        return {
-          status: 'success',
-          message: `Verification code sent to ${phone} (Demo Mode)`,
-          dev_otp: '123456',
-        };
-      }
-      throw error;
-    }
+    const res = await api.post('/auth/send-otp', { phone, name });
+    return res.data;
   },
 
   loginWithOtp: async (phone: string, otp: string, name?: string) => {
@@ -131,34 +121,146 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const res = await api.post('/auth/verify-otp', { phone, otp, name });
       const { access_token, refresh_token, user } = res.data;
 
-      await AsyncStorage.setItem('userToken', access_token);
+      const storageItems: [string, string][] = [
+        ['userToken', access_token],
+        ['userProfile', JSON.stringify(user)],
+      ];
       if (refresh_token) {
-        await AsyncStorage.setItem('refreshToken', refresh_token);
+        storageItems.push(['refreshToken', refresh_token]);
       }
-      await AsyncStorage.setItem('userProfile', JSON.stringify(user));
+      await AsyncStorage.multiSet(storageItems);
 
       set({ user, token: access_token, isAuthenticated: true, isLoading: false });
       return user;
-    } catch (error: any) {
-      // If backend is unreachable over LAN during Expo Go testing, log in locally with demo profile
-      if (!error.response || error.message?.includes('Network') || error.code === 'ERR_NETWORK') {
-        const dummyUser: UserProfile = {
-          id: 'user_' + Date.now(),
-          name: name?.trim() || 'SelfTrack User',
-          phone,
-          email: `${phone.replace(/\D/g, '')}@selftrack.app`,
-          total_xp: 100,
-          level: 1,
-          streak_count: 0,
-          interests: [],
-          goals: [],
-        };
-        const token = 'offline_token_' + Date.now();
-        await AsyncStorage.setItem('userToken', token);
-        await AsyncStorage.setItem('userProfile', JSON.stringify(dummyUser));
-        set({ user: dummyUser, token, isAuthenticated: true, isLoading: false });
-        return dummyUser;
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
+  loginWithPhonePin: async (name: string, phone: string, pin: string, isRegistration: boolean = false) => {
+    set({ isLoading: true });
+    const digits = phone.replace(/\D/g, '');
+    const normalizedPhone = digits.length >= 10 ? digits.slice(-10) : digits;
+    const cleanPin = pin.trim().slice(0, 4);
+
+    try {
+      const res = await api.post(
+        '/auth/phone-pin',
+        { name, phone, pin: cleanPin, is_registration: isRegistration },
+        { timeout: 1500 }
+      );
+      const { access_token, refresh_token, user } = res.data;
+
+      if (isRegistration) {
+        await resetAppDataForNewUser();
       }
+
+      set({ user, token: access_token, isAuthenticated: true, isLoading: false });
+
+      try {
+        const storedUsersRaw = await AsyncStorage.getItem('selftrack_registered_users');
+        const storedUsers = storedUsersRaw ? JSON.parse(storedUsersRaw) : {};
+        storedUsers[normalizedPhone] = {
+          user,
+          pin: cleanPin,
+          name: user.name,
+          phone,
+        };
+        await AsyncStorage.setItem('selftrack_registered_users', JSON.stringify(storedUsers));
+      } catch (_err) { }
+
+      const storageItems: [string, string][] = [
+        ['userToken', access_token],
+        ['userProfile', JSON.stringify(user)],
+      ];
+      if (refresh_token) {
+        storageItems.push(['refreshToken', refresh_token]);
+      }
+      AsyncStorage.multiSet(storageItems).catch(() => { });
+
+      return user;
+    } catch (error: any) {
+      if (error.response) {
+        set({ isLoading: false });
+        throw error;
+      }
+
+      if (!error.response || error.message?.includes('Network') || error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
+        try {
+          const storedUsersRaw = await AsyncStorage.getItem('selftrack_registered_users');
+          const storedUsers = storedUsersRaw ? JSON.parse(storedUsersRaw) : {};
+          const existingRecord = storedUsers[normalizedPhone];
+
+          if (isRegistration) {
+            if (existingRecord) {
+              set({ isLoading: false });
+              const err: any = new Error(`An account with mobile number ${phone} is already registered. Please switch to Sign In and enter your PIN.`);
+              err.response = {
+                status: 400,
+                data: { detail: `An account with mobile number ${phone} is already registered. Please switch to Sign In and enter your PIN.` }
+              };
+              throw err;
+            }
+
+            await resetAppDataForNewUser();
+
+            const newUser: UserProfile = {
+              id: 'user_' + normalizedPhone,
+              name: name.trim() || 'SelfTrack User',
+              phone,
+              email: `${normalizedPhone}@selftrack.app`,
+              total_xp: 100,
+              level: 1,
+              streak_count: 0,
+              interests: [],
+              goals: [],
+            };
+            storedUsers[normalizedPhone] = {
+              user: newUser,
+              pin: cleanPin,
+              name: newUser.name,
+              phone,
+            };
+            await AsyncStorage.setItem('selftrack_registered_users', JSON.stringify(storedUsers));
+            const token = 'offline_token_' + Date.now();
+            await AsyncStorage.setItem('userToken', token);
+            await AsyncStorage.setItem('userProfile', JSON.stringify(newUser));
+            set({ user: newUser, token, isAuthenticated: true, isLoading: false });
+            return newUser;
+          } else {
+            if (!existingRecord) {
+              set({ isLoading: false });
+              const err: any = new Error(`No registered account found with this mobile number. Either check your number or tap "Register" to create a new account.`);
+              err.response = {
+                status: 404,
+                data: { detail: `No registered account found with this mobile number. Either check your number or tap "Register" to create a new account.` }
+              };
+              throw err;
+            }
+
+            if (existingRecord.pin !== cleanPin) {
+              set({ isLoading: false });
+              const err: any = new Error(`The PIN you entered does not match this mobile number. Either the mobile number or PIN is not correct, or please register as a new user.`);
+              err.response = {
+                status: 401,
+                data: { detail: `The PIN you entered does not match this mobile number. Either the mobile number or PIN is not correct, or please register as a new user.` }
+              };
+              throw err;
+            }
+
+            const token = 'offline_token_' + Date.now();
+            await AsyncStorage.setItem('userToken', token);
+            await AsyncStorage.setItem('userProfile', JSON.stringify(existingRecord.user));
+            set({ user: existingRecord.user, token, isAuthenticated: true, isLoading: false });
+            return existingRecord.user;
+          }
+        } catch (localErr: any) {
+          set({ isLoading: false });
+          throw localErr;
+        }
+      }
+
       set({ isLoading: false });
       throw error;
     }
@@ -169,13 +271,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const res = await api.post('/auth/login', { email, password });
       const { access_token, refresh_token, user } = res.data;
-      
+
       await AsyncStorage.setItem('userToken', access_token);
       if (refresh_token) {
         await AsyncStorage.setItem('refreshToken', refresh_token);
       }
       await AsyncStorage.setItem('userProfile', JSON.stringify(user));
-      
+
       set({ user, token: access_token, isAuthenticated: true, isLoading: false });
       return user;
     } catch (error) {
@@ -184,18 +286,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  register: async (name: string, email: string, password: string, interests = [], goals = []) => {
+  register: async (name: string, email: string, password: string, interests: string[] = [], goals: string[] = []) => {
     set({ isLoading: true });
     try {
       const res = await api.post('/auth/register', { name, email, password, interests, goals });
       const { access_token, refresh_token, user } = res.data;
-      
+
+      await resetAppDataForNewUser();
+
       await AsyncStorage.setItem('userToken', access_token);
       if (refresh_token) {
         await AsyncStorage.setItem('refreshToken', refresh_token);
       }
       await AsyncStorage.setItem('userProfile', JSON.stringify(user));
-      
+
       set({ user, token: access_token, isAuthenticated: true, isLoading: false });
       return user;
     } catch (error) {
@@ -206,16 +310,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     await AsyncStorage.multiRemove(['userToken', 'refreshToken', 'userProfile']);
+    await resetAppDataForNewUser();
     set({ user: null, token: null, isAuthenticated: false });
   },
 
   deleteAccount: async () => {
     try {
       await api.delete('/auth/account');
-    } catch (e) {
-      // Continue cleanup regardless
-    }
+    } catch (_e) { }
     await AsyncStorage.multiRemove(['userToken', 'refreshToken', 'userProfile']);
+    await resetAppDataForNewUser();
     set({ user: null, token: null, isAuthenticated: false });
   },
 
@@ -237,12 +341,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const currentUser = get().user;
       const res = await api.put('/users/profile', updates);
       const updated = { ...currentUser, ...updates, ...res.data };
-      if (updates.avatar_url) updated.avatar_url = updates.avatar_url; // Ensure avatar_url is retained even if backend omits it
+      if (updates.avatar_url) updated.avatar_url = updates.avatar_url;
       set({ user: updated });
       await AsyncStorage.setItem('userProfile', JSON.stringify(updated));
       return updated;
     } catch (error) {
-      // Fallback: update local profile state optimistically
       const currentUser = get().user;
       if (currentUser) {
         const fallback = { ...currentUser, ...updates };
@@ -261,7 +364,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       email: 'guest@selftrack.local',
       total_xp: 350,
       level: 1,
-      streak_count: 5,
+      streak_count: 0,
       interests: ['Fitness', 'Productivity', 'Mindfulness'],
       goals: ['Build daily habits', 'Hydration tracking', 'Mental wellness'],
     };
@@ -270,12 +373,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await AsyncStorage.setItem('isGuestMode', 'true');
     set({ user: guestUser, token: 'local_guest_token', isAuthenticated: true, isLoading: false });
     return guestUser;
-  },
-
-  setUser: (user: UserProfile | null) => {
-    set({ user });
-    if (user) {
-      AsyncStorage.setItem('userProfile', JSON.stringify(user));
-    }
   },
 }));

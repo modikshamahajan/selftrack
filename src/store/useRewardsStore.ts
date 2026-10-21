@@ -43,7 +43,7 @@ const DEFAULT_SUMMARY: RewardSummary = {
   level: 1,
   current_level_xp: 350,
   next_level_xp: 1000,
-  streak_count: 5,
+  streak_count: 0,
   badges_count: 2,
 };
 

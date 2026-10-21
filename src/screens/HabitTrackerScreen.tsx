@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Animated, Dimensions, Platform } from 'react-native';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Animated, Dimensions, Platform, Modal } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -235,68 +236,106 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
 
   // Habit Stacking Routines State
   const [activeRoutine, setActiveRoutine] = useState<'morning' | 'evening' | null>(null);
+  const [morningHabitIds, setMorningHabitIds] = useState<string[]>([]);
+  const [eveningHabitIds, setEveningHabitIds] = useState<string[]>([]);
+  const [customizingRoutine, setCustomizingRoutine] = useState<'morning' | 'evening' | null>(null);
 
-  const MORNING_ROUTINE_STEPS: RoutineStep[] = [
-    {
-      id: 'step-water',
-      title: 'Hydrate & Awaken',
-      subtitle: 'Drink a tall glass of fresh water (500ml) to awaken metabolism and clarity.',
-      icon: 'droplet',
-      color: '#00B4D8',
-    },
-    {
-      id: 'step-movement',
-      title: 'Light Body Activation',
-      subtitle: 'Do 5 minutes of gentle morning stretching, yoga, or energizing movement.',
-      icon: 'activity',
-      color: '#2ECC71',
-    },
-    {
-      id: 'step-intentions',
-      title: 'Set Top Intentions',
-      subtitle: 'Define your #1 priority goal for today and mentally prime yourself for flow.',
-      icon: 'sun',
-      color: '#F59E0B',
-    },
-  ];
+  useEffect(() => {
+    AsyncStorage.getItem('selftrack_morning_routine_habits').then((val) => {
+      if (val) {
+        try { setMorningHabitIds(JSON.parse(val)); } catch {}
+      }
+    });
+    AsyncStorage.getItem('selftrack_evening_routine_habits').then((val) => {
+      if (val) {
+        try { setEveningHabitIds(JSON.parse(val)); } catch {}
+      }
+    });
+  }, []);
 
-  const EVENING_ROUTINE_STEPS: RoutineStep[] = [
-    {
-      id: 'step-reflect',
-      title: 'Mindful Journal Log',
-      subtitle: 'Reflect on 1 win and 1 thing you are grateful for today.',
-      icon: 'book',
-      color: '#6C5CE7',
-    },
-    {
-      id: 'step-breathe',
-      title: '1-Min Box Breathing',
-      subtitle: 'Lower heart rate and dissolve daily stress with 4 calm Pranayama breath cycles.',
-      icon: 'wind',
-      color: '#38BDF8',
-    },
-    {
-      id: 'step-sunset',
-      title: 'Digital Sunset',
-      subtitle: 'Dim the room lights, plug phone away from bed, and prepare for deep restorative sleep.',
-      icon: 'moon',
-      color: '#9B59B6',
-    },
-  ];
+  const saveRoutineHabits = async (routineType: 'morning' | 'evening', ids: string[]) => {
+    if (routineType === 'morning') {
+      setMorningHabitIds(ids);
+      await AsyncStorage.setItem('selftrack_morning_routine_habits', JSON.stringify(ids));
+    } else {
+      setEveningHabitIds(ids);
+      await AsyncStorage.setItem('selftrack_evening_routine_habits', JSON.stringify(ids));
+    }
+    setCustomizingRoutine(null);
+  };
+
+  const morningRoutineSteps: RoutineStep[] = useMemo(() => {
+    const selected = habits.filter(
+      (h) => morningHabitIds.includes(h.id) || (h as any).routine_type === 'morning'
+    );
+    if (selected.length > 0) {
+      return selected.map((h) => ({
+        id: h.id,
+        title: h.name,
+        subtitle: `${h.category} • Streak: ${h.streak}d`,
+        icon: h.icon || 'sun',
+        color: h.color || '#F59E0B',
+      }));
+    }
+    if (habits.length > 0) {
+      return habits.slice(0, 3).map((h) => ({
+        id: h.id,
+        title: h.name,
+        subtitle: `${h.category} • Tap 'Customize' to configure`,
+        icon: h.icon || 'sun',
+        color: h.color || '#F59E0B',
+      }));
+    }
+    return [
+      {
+        id: 'no-habits-morning',
+        title: 'Add Morning Habits',
+        subtitle: 'Tap the "+" button below to create habits for your Morning Kickstart.',
+        icon: 'plus-circle',
+        color: '#F59E0B',
+      },
+    ];
+  }, [habits, morningHabitIds]);
+
+  const eveningRoutineSteps: RoutineStep[] = useMemo(() => {
+    const selected = habits.filter(
+      (h) => eveningHabitIds.includes(h.id) || (h as any).routine_type === 'evening'
+    );
+    if (selected.length > 0) {
+      return selected.map((h) => ({
+        id: h.id,
+        title: h.name,
+        subtitle: `${h.category} • Streak: ${h.streak}d`,
+        icon: h.icon || 'moon',
+        color: h.color || '#6366F1',
+      }));
+    }
+    if (habits.length > 0) {
+      return habits.slice(-3).map((h) => ({
+        id: h.id,
+        title: h.name,
+        subtitle: `${h.category} • Tap 'Customize' to configure`,
+        icon: h.icon || 'moon',
+        color: h.color || '#6366F1',
+      }));
+    }
+    return [
+      {
+        id: 'no-habits-evening',
+        title: 'Add Evening Habits',
+        subtitle: 'Tap the "+" button below to create habits for your Evening Wind-down.',
+        icon: 'plus-circle',
+        color: '#6366F1',
+      },
+    ];
+  }, [habits, eveningHabitIds]);
 
   const handleStepCompleteInRoutine = (stepId: string) => {
     const selectedDate = weekDates[selectedDayIndex];
     if (!selectedDate) return;
     const dateKey = getDateKey(selectedDate);
 
-    const matchingHabit = habits.find((h) => {
-      const name = h.name.toLowerCase();
-      if (stepId.includes('water') && name.includes('water')) return true;
-      if (stepId.includes('movement') && (name.includes('stretch') || name.includes('walk') || name.includes('workout') || name.includes('exercise'))) return true;
-      if (stepId.includes('reflect') && (name.includes('journal') || name.includes('read') || name.includes('reflect'))) return true;
-      return false;
-    });
-
+    const matchingHabit = habits.find((h) => h.id === stepId);
     if (matchingHabit && !matchingHabit.completedDays?.[dateKey]) {
       storeToggleHabit(matchingHabit.id, dateKey);
     }
@@ -438,7 +477,23 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
         {/* Habit Stacking Routines Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Habit Stacking Flows</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.sectionTitle}>Habit Stacking Flows</Text>
+              <TouchableOpacity
+                style={styles.customizeRitualsHeaderBtn}
+                onPress={() => {
+                  if (habits.length === 0) {
+                    Alert.alert('No Habits Yet', 'Create your daily habits first using the "+" button, then assign them to rituals.');
+                    return;
+                  }
+                  setCustomizingRoutine('morning');
+                }}
+                activeOpacity={0.7}
+              >
+                <Icon name="sliders" size={12} color="#4F46E5" style={{ marginRight: 4 }} />
+                <Text style={styles.customizeRitualsHeaderText}>Customize</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.routineBadge}>
               <Text style={styles.routineBadgeText}>+50 XP RITUAL</Text>
             </View>
@@ -455,6 +510,10 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
                   );
                   return;
                 }
+                if (habits.length === 0) {
+                  Alert.alert('No Habits Yet', 'Add habits using the "+" button below to build your custom morning ritual.');
+                  return;
+                }
                 setActiveRoutine('morning');
               }}
             >
@@ -468,7 +527,11 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
                 <View style={styles.routineContent}>
                   <Text style={styles.routineTitle}>Morning Kickstart</Text>
                   <Text style={[styles.routineSubtitle, isMorningDoneToday && { color: '#16A34A', fontWeight: '700' }]}>
-                    {isMorningDoneToday ? 'Completed for today 🎉' : '3 Steps • Hydrate, Move, Focus'}
+                    {isMorningDoneToday
+                      ? 'Completed for today 🎉'
+                      : habits.length === 0
+                      ? 'Tap to add habits'
+                      : `${morningRoutineSteps.length} Step${morningRoutineSteps.length !== 1 ? 's' : ''} • ${morningRoutineSteps.map((s) => s.title).slice(0, 2).join(', ')}`}
                   </Text>
                 </View>
                 <View style={[styles.routineActionBtn, { backgroundColor: isMorningDoneToday ? '#16A34A' : '#F59E0B' }]}>
@@ -488,6 +551,10 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
                   );
                   return;
                 }
+                if (habits.length === 0) {
+                  Alert.alert('No Habits Yet', 'Add habits using the "+" button below to build your custom evening ritual.');
+                  return;
+                }
                 setActiveRoutine('evening');
               }}
             >
@@ -501,7 +568,11 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
                 <View style={styles.routineContent}>
                   <Text style={styles.routineTitle}>Evening Wind-down</Text>
                   <Text style={[styles.routineSubtitle, isEveningDoneToday && { color: '#16A34A', fontWeight: '700' }]}>
-                    {isEveningDoneToday ? 'Completed for today 🌙' : '3 Steps • Reflect, Breathe, Rest'}
+                    {isEveningDoneToday
+                      ? 'Completed for today 🌙'
+                      : habits.length === 0
+                      ? 'Tap to add habits'
+                      : `${eveningRoutineSteps.length} Step${eveningRoutineSteps.length !== 1 ? 's' : ''} • ${eveningRoutineSteps.map((s) => s.title).slice(0, 2).join(', ')}`}
                   </Text>
                 </View>
                 <View style={[styles.routineActionBtn, { backgroundColor: isEveningDoneToday ? '#16A34A' : '#6366F1' }]}>
@@ -584,10 +655,107 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
         visible={Boolean(activeRoutine)}
         routineTitle={activeRoutine === 'morning' ? 'Morning Kickstart Ritual' : 'Evening Wind-Down Ritual'}
         routineType={activeRoutine || 'morning'}
-        steps={activeRoutine === 'morning' ? MORNING_ROUTINE_STEPS : EVENING_ROUTINE_STEPS}
+        steps={activeRoutine === 'morning' ? morningRoutineSteps : eveningRoutineSteps}
         onClose={() => setActiveRoutine(null)}
         onStepComplete={handleStepCompleteInRoutine}
       />
+
+      {/* Routine Habit Customizer Modal */}
+      <Modal visible={Boolean(customizingRoutine)} transparent animationType="slide">
+        <View style={styles.customizerModalOverlay}>
+          <View style={styles.customizerModalCard}>
+            <View style={styles.customizerModalHeader}>
+              <View>
+                <Text style={styles.customizerModalTitle}>
+                  {customizingRoutine === 'morning' ? '🌅 Morning Kickstart Ritual' : '🌙 Evening Wind-down Ritual'}
+                </Text>
+                <Text style={styles.customizerModalSub}>
+                  Select habits from your daily focus to include in this flow
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setCustomizingRoutine(null)}>
+                <Icon name="x" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Routine Switcher Tab */}
+            <View style={styles.customizerTabRow}>
+              <TouchableOpacity
+                style={[styles.customizerTab, customizingRoutine === 'morning' && styles.customizerTabActive]}
+                onPress={() => setCustomizingRoutine('morning')}
+              >
+                <Text style={[styles.customizerTabText, customizingRoutine === 'morning' && styles.customizerTabTextActive]}>
+                  🌅 Morning ({morningHabitIds.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.customizerTab, customizingRoutine === 'evening' && styles.customizerTabActive]}
+                onPress={() => setCustomizingRoutine('evening')}
+              >
+                <Text style={[styles.customizerTabText, customizingRoutine === 'evening' && styles.customizerTabTextActive]}>
+                  🌙 Evening ({eveningHabitIds.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+              {habits.length === 0 ? (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center' }}>
+                    No habits created yet. Tap "+" on the main screen to create your habits first!
+                  </Text>
+                </View>
+              ) : (
+                habits.map((habit) => {
+                  const currentIds = customizingRoutine === 'morning' ? morningHabitIds : eveningHabitIds;
+                  const isChecked = currentIds.includes(habit.id);
+                  return (
+                    <TouchableOpacity
+                      key={habit.id}
+                      style={[styles.customizerHabitRow, isChecked && styles.customizerHabitRowChecked]}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        const newIds = isChecked
+                          ? currentIds.filter((id) => id !== habit.id)
+                          : [...currentIds, habit.id];
+                        if (customizingRoutine === 'morning') {
+                          setMorningHabitIds(newIds);
+                        } else {
+                          setEveningHabitIds(newIds);
+                        }
+                      }}
+                    >
+                      <View style={[styles.habitIconMini, { backgroundColor: (habit.color || '#4F46E5') + '20' }]}>
+                        <Icon name={(habit.icon as any) || 'check'} size={16} color={habit.color || '#4F46E5'} />
+                      </View>
+                      <View style={{ flex: 1, marginHorizontal: 10 }}>
+                        <Text style={styles.customizerHabitName}>{habit.name}</Text>
+                        <Text style={styles.customizerHabitCategory}>{habit.category} • Streak: {habit.streak}d</Text>
+                      </View>
+                      <View style={[styles.customizerCheckCircle, isChecked && styles.customizerCheckCircleChecked]}>
+                        {isChecked && <Icon name="check" size={14} color="#FFF" />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.customizerSaveBtn}
+              activeOpacity={0.8}
+              onPress={() => {
+                if (customizingRoutine) {
+                  const ids = customizingRoutine === 'morning' ? morningHabitIds : eveningHabitIds;
+                  saveRoutineHabits(customizingRoutine, ids);
+                }
+              }}
+            >
+              <Text style={styles.customizerSaveBtnText}>Save Ritual Flow</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -855,6 +1023,138 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadow.sm,
+  },
+
+  /* ---------- RITUAL CUSTOMIZER MODAL ---------- */
+  customizeRitualsHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  customizeRitualsHeaderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  customizerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  customizerModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '85%',
+  },
+  customizerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  customizerModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  customizerModalSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  customizerTabRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  customizerTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  customizerTabActive: {
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#6366F1',
+  },
+  customizerTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  customizerTabTextActive: {
+    color: '#4F46E5',
+    fontWeight: '700',
+  },
+  customizerHabitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  customizerHabitRowChecked: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#86EFAC',
+  },
+  habitIconMini: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customizerHabitName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  customizerHabitCategory: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  customizerCheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customizerCheckCircleChecked: {
+    backgroundColor: '#16A34A',
+    borderColor: '#16A34A',
+  },
+  customizerSaveBtn: {
+    backgroundColor: '#4F46E5',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  customizerSaveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
 

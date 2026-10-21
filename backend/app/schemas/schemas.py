@@ -33,6 +33,13 @@ class VerifyOtpRequest(BaseModel):
     name: Optional[str] = None
 
 
+class PhonePinAuthRequest(BaseModel):
+    name: Optional[str] = None
+    phone: str = Field(..., min_length=7, max_length=25)
+    pin: str = Field(..., min_length=4, max_length=12)
+    is_registration: Optional[bool] = False
+
+
 class SendOtpResponse(BaseModel):
     status: str = "success"
     message: str

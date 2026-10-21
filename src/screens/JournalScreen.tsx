@@ -396,9 +396,9 @@ const MarkdownRenderer: React.FC<{ content: string; style?: any }> = ({ content,
           );
         }
 
-        // Empty line spacer
+        // Empty line spacer - provides full 18px line height so multiple Enters space lines apart!
         if (!trimmed) {
-          return <View key={lineIdx} style={{ height: 6 }} />;
+          return <View key={lineIdx} style={{ height: 18 }} />;
         }
 
         // Regular Paragraph
@@ -477,6 +477,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [activeInputText, setActiveInputText] = useState<string>('');
   const [activeFormat, setActiveFormat] = useState<FormatType | null>(null);
   const textInputRef = useRef<TextInput>(null);
+  const editorScrollViewRef = useRef<ScrollView>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -532,7 +533,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     activeFmt: FormatType | null
   ): string => {
     const all = [...segs];
-    if (activeText) {
+    if (activeText !== undefined && activeText !== null && activeText !== '') {
       all.push({
         id: 'active',
         text: activeText,
@@ -544,49 +545,57 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     let currentNumber = 1;
 
     all.forEach((seg) => {
-      const text = seg.text?.trim();
-      if (!text) return;
-      if (text === '\n') {
-        md += '\n';
+      // If it's normal text / active typing line, append text with all newlines and spacing preserved!
+      if (seg.format === 'normal' || seg.format === undefined || (seg.id === 'active' && !activeFmt)) {
+        md += seg.text;
         currentNumber = 1;
+        return;
+      }
+
+      const text = seg.text;
+      if (!text && text !== '') return;
+
+      const trimmed = text.trim();
+      if (!trimmed) {
+        md += text;
         return;
       }
 
       switch (seg.format) {
         case 'bold':
-          md += `**${text}** `;
+          md += `**${trimmed}** `;
           currentNumber = 1;
           break;
         case 'italic':
-          md += `*${text}* `;
+          md += `*${trimmed}* `;
           currentNumber = 1;
           break;
         case 'h1':
-          md += `\n# ${text}\n`;
+          md += `\n# ${trimmed}\n`;
           currentNumber = 1;
           break;
         case 'h2':
-          md += `\n## ${text}\n`;
+          md += `\n## ${trimmed}\n`;
           currentNumber = 1;
           break;
         case 'bullet':
-          md += `\n• ${text}\n`;
+          md += `\n• ${trimmed}\n`;
           currentNumber = 1;
           break;
         case 'number':
-          md += `\n${currentNumber}. ${text}\n`;
+          md += `\n${currentNumber}. ${trimmed}\n`;
           currentNumber++;
           break;
         case 'check':
-          md += `\n${seg.checked ? '[x]' : '[ ]'} ${text}\n`;
+          md += `\n${seg.checked ? '[x]' : '[ ]'} ${trimmed}\n`;
           currentNumber = 1;
           break;
         case 'quote':
-          md += `\n> ${text}\n`;
+          md += `\n> ${trimmed}\n`;
           currentNumber = 1;
           break;
         case 'code':
-          md += `\`${text}\` `;
+          md += `\`${trimmed}\` `;
           currentNumber = 1;
           break;
         default:
@@ -596,7 +605,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       }
     });
 
-    return md.trim();
+    return md;
   };
 
   // Toggle or select format from toolbar
@@ -640,7 +649,16 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   // Handles typing & auto-advancement on Enter key for bullet, number (1. -> 2.), checklist, etc.
   const handleActiveInputChange = (text: string) => {
-    if (text.includes('\n')) {
+    // Only intercept Enter key when an active list, quote or heading format is selected
+    const isSpecialListOrHeading =
+      activeFormat === 'bullet' ||
+      activeFormat === 'number' ||
+      activeFormat === 'check' ||
+      activeFormat === 'h1' ||
+      activeFormat === 'h2' ||
+      activeFormat === 'quote';
+
+    if (isSpecialListOrHeading && text.includes('\n')) {
       const parts = text.split('\n');
       const committedLine = parts[0];
       const remainingNewText = parts.slice(1).join('\n');
@@ -668,8 +686,8 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
       // Next line formatting:
       let nextFormat: FormatType | null = activeFormat;
-      if (activeFormat === 'h1' || activeFormat === 'h2') {
-        nextFormat = null; // Headings are single-line; return to normal text
+      if (activeFormat === 'h1' || activeFormat === 'h2' || activeFormat === 'quote') {
+        nextFormat = null; // Headings and quotes are single-line; return to normal text
       } else if (activeFormat === 'bullet' || activeFormat === 'number' || activeFormat === 'check') {
         nextFormat = activeFormat; // Lists auto-continue to next line!
       }
@@ -677,12 +695,18 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       setActiveFormat(nextFormat);
       setActiveInputText(remainingNewText);
       setInputText(serializeToMarkdown(updatedSegments, remainingNewText, nextFormat));
+      requestAnimationFrame(() => {
+        editorScrollViewRef.current?.scrollToEnd({ animated: true });
+      });
       return;
     }
 
-    // Regular live typing
+    // Regular live typing (preserves all newlines, multiple Enters, spaces, etc. without losing any empty lines!)
     setActiveInputText(text);
     setInputText(serializeToMarkdown(segments, text, activeFormat));
+    requestAnimationFrame(() => {
+      editorScrollViewRef.current?.scrollToEnd({ animated: true });
+    });
   };
 
   const handleKeyPress = ({ nativeEvent }: any) => {
@@ -873,7 +897,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       return {
-        key: d.toISOString().split('T')[0],
+        key: formatLocalDate(d),
         date: d,
         dayLabel: d.toLocaleDateString('en-US', { weekday: 'short' }),
         dateLabel: d.getDate(),
@@ -976,8 +1000,13 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   useSpeechRecognitionEvent('error', (event: any) => {
     setIsRecording(false);
-    if (event?.error !== 'no-speech' && event?.error !== 'aborted') {
+    const errCode = event?.error || '';
+    if (errCode !== 'no-speech' && errCode !== 'aborted') {
       console.log('Speech error:', event?.message || event?.error);
+      Alert.alert(
+        'Voice Dictation',
+        event?.message || `Voice recognition stopped (${errCode || 'service unavailable'}). Please tap the mic to try speaking again.`
+      );
     }
   });
 
@@ -985,39 +1014,61 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     const transcript = event?.results?.[0]?.transcript;
     if (transcript) {
       const base = baseTextRef.current ? baseTextRef.current.trim() + ' ' : '';
-      setInputText(base + transcript);
+      const updated = base + transcript;
+      setActiveInputText(updated);
+      setInputText(serializeToMarkdown(segments, updated, activeFormat));
       if (event.isFinal) {
-        baseTextRef.current = base + transcript;
+        baseTextRef.current = updated;
       }
+      requestAnimationFrame(() => {
+        editorScrollViewRef.current?.scrollToEnd({ animated: true });
+      });
     }
   });
 
   const toggleSpeech = async () => {
     try {
       if (!ExpoSpeechRecognitionModule) {
-        Alert.alert('Speech Unsupported', 'Speech recognition is not available in Expo Go. Please type directly.');
+        Alert.alert(
+          'Microphone in APK',
+          'Speech recognition uses native Android speech services (available in the installed standalone APK). In Expo Go, please type your reflection directly.'
+        );
         return;
       }
+
       if (!isRecording) {
-        baseTextRef.current = inputText;
+        // Verify on Android whether recognition service is present
+        if (typeof ExpoSpeechRecognitionModule.isRecognitionAvailable === 'function') {
+          const available = ExpoSpeechRecognitionModule.isRecognitionAvailable();
+          if (!available) {
+            Alert.alert(
+              'Speech Service Not Found',
+              'Google Speech Recognition service is not enabled on this device. Please check that Google Speech Services are enabled in your Android Settings.'
+            );
+            return;
+          }
+        }
+
+        baseTextRef.current = activeInputText;
         const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
         if (result.granted) {
           setIsRecording(true);
           await ExpoSpeechRecognitionModule.start({
             lang: 'en-US',
             interimResults: true,
-            continuous: true,
+            continuous: Platform.OS === 'ios' ? true : undefined,
+            addsPunctuation: true,
           });
         } else {
-          Alert.alert('Permission Required', 'Microphone permission is needed for speech dictation.');
+          Alert.alert('Permission Required', 'Microphone permission is needed for speech dictation. Please allow microphone access.');
         }
       } else {
         setIsRecording(false);
         await ExpoSpeechRecognitionModule.stop();
       }
-    } catch (e) {
+    } catch (e: any) {
       setIsRecording(false);
-      Alert.alert('Speech Error', 'Failed to toggle voice recognition: ' + (e as Error).message);
+      Alert.alert('Speech Error', 'Failed to toggle voice recognition: ' + (e?.message || e));
     }
   };
 
@@ -1206,8 +1257,8 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     seg: { id: string; text: string; format: FormatType | 'normal'; checked?: boolean },
     index: number
   ) => {
-    if (seg.text === '\n') {
-      return <View style={{ height: 6 }} />;
+    if (seg.text === '\n' || !seg.text?.trim()) {
+      return <View style={{ height: 18 }} />;
     }
 
     switch (seg.format) {
@@ -1297,9 +1348,9 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         style={{ flex: 1 }}
       >
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 110 }}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: keyboardHeight > 0 ? keyboardHeight + 50 : 70 }}
         >
           {/* TOP LIGHT COLOR HERO PANEL */}
           <View style={styles.heroWrapper}>
@@ -1544,7 +1595,7 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               style={styles.promptGradient}
             >
               <View style={styles.promptLeft}>
-                <Text style={styles.promptLabel}>THOUGHT OF THE DAY</Text>
+                <Text style={styles.promptLabel}>QUESTION OF THE DAY</Text>
                 <Text style={styles.promptText}>{PROMPT_SUGGESTIONS[activePromptIndex]}</Text>
               </View>
               <TouchableOpacity onPress={rotatePrompt} style={styles.refreshPromptBtn}>
@@ -1724,57 +1775,68 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 style={styles.unifiedEditorBox}
                 onPress={() => textInputRef.current?.focus()}
               >
-                {/* Previously typed styled segments */}
-                {segments.length > 0 && (
-                  <View style={styles.committedSegmentsWrap}>
-                    {segments.map((seg, idx) => (
-                      <TouchableOpacity
-                        key={seg.id || idx}
-                        activeOpacity={0.8}
-                        onPress={() => handleEditSegment(idx)}
-                      >
-                        {renderSegmentItem(seg, idx)}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                <ScrollView
+                  ref={editorScrollViewRef}
+                  style={styles.editorScrollContainer}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                  persistentScrollbar={true}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {/* Previously typed styled segments */}
+                  {segments.length > 0 && (
+                    <View style={styles.committedSegmentsWrap}>
+                      {segments.map((seg, idx) => (
+                        <TouchableOpacity
+                          key={seg.id || idx}
+                          activeOpacity={0.8}
+                          onPress={() => handleEditSegment(idx)}
+                        >
+                          {renderSegmentItem(seg, idx)}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
 
-                {/* Active typing line with live dynamic format styling */}
-                <View style={[styles.activeInputRow, getActiveRowStyle(activeFormat)]}>
-                  {renderActiveFormatPrefix(activeFormat)}
-                  <TextInput
-                    ref={textInputRef}
-                    style={[styles.activeTextInput, getActiveInputTextStyle(activeFormat)]}
-                    placeholder={
-                      segments.length === 0
-                        ? "Write your reflections, breakthroughs, and gratitude..."
-                        : activeFormat === 'bold'
-                        ? "Type bold text..."
-                        : activeFormat === 'italic'
-                        ? "Type italic text..."
-                        : activeFormat === 'h1'
-                        ? "Type Heading 1..."
-                        : activeFormat === 'h2'
-                        ? "Type Heading 2..."
-                        : activeFormat === 'bullet'
-                        ? "Type bullet item..."
-                        : activeFormat === 'number'
-                        ? `Type item ${getNextListNumber(segments)}...`
-                        : activeFormat === 'check'
-                        ? "Type action task..."
-                        : activeFormat === 'quote'
-                        ? "Type meaningful thought..."
-                        : activeFormat === 'code'
-                        ? "Type code keyword..."
-                        : "Continue writing your reflection..."
-                    }
-                    placeholderTextColor="#94A3B8"
-                    multiline
-                    value={activeInputText}
-                    onChangeText={handleActiveInputChange}
-                    onKeyPress={handleKeyPress}
-                  />
-                </View>
+                  {/* Active typing line with live dynamic format styling */}
+                  <View style={[styles.activeInputRow, getActiveRowStyle(activeFormat)]}>
+                    {renderActiveFormatPrefix(activeFormat)}
+                    <TextInput
+                      ref={textInputRef}
+                      style={[styles.activeTextInput, getActiveInputTextStyle(activeFormat)]}
+                      placeholder={
+                        segments.length === 0
+                          ? "Write your reflections, breakthroughs, and gratitude..."
+                          : activeFormat === 'bold'
+                          ? "Type bold text..."
+                          : activeFormat === 'italic'
+                          ? "Type italic text..."
+                          : activeFormat === 'h1'
+                          ? "Type Heading 1..."
+                          : activeFormat === 'h2'
+                          ? "Type Heading 2..."
+                          : activeFormat === 'bullet'
+                          ? "Type bullet item..."
+                          : activeFormat === 'number'
+                          ? `Type item ${getNextListNumber(segments)}...`
+                          : activeFormat === 'check'
+                          ? "Type action task..."
+                          : activeFormat === 'quote'
+                          ? "Type meaningful thought..."
+                          : activeFormat === 'code'
+                          ? "Type code keyword..."
+                          : "Continue writing your reflection..."
+                      }
+                      placeholderTextColor="#94A3B8"
+                      multiline
+                      value={activeInputText}
+                      onChangeText={handleActiveInputChange}
+                      onKeyPress={handleKeyPress}
+                      scrollEnabled={false}
+                    />
+                  </View>
+                </ScrollView>
               </TouchableOpacity>
 
               {/* Image Grid with Delete Badge */}
@@ -1897,7 +1959,15 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     </View>
                   </View>
 
-                  <MarkdownRenderer content={entry.preview} style={styles.entryMarkdownBody} />
+                  <View style={styles.entryContentContainer}>
+                    <ScrollView
+                      style={styles.entryScrollBox}
+                      nestedScrollEnabled={true}
+                      showsVerticalScrollIndicator={true}
+                    >
+                      <MarkdownRenderer content={entry.preview} style={styles.entryMarkdownBody} />
+                    </ScrollView>
+                  </View>
 
                   {/* Activity tags in Feed Item */}
                   {entry.activities && entry.activities.length > 0 && (
@@ -2199,8 +2269,8 @@ const styles = StyleSheet.create({
 
   // 1-WEEK DATE STRIP
   weekSectionContainer: {
-    marginTop: 14,
-    marginBottom: 16,
+    marginTop: 8,
+    marginBottom: 10,
     paddingHorizontal: 16,
   },
   weekHeader: {
@@ -2316,7 +2386,7 @@ const styles = StyleSheet.create({
   // SECTION GENERAL
   section: {
     paddingHorizontal: 16,
-    marginBottom: 18,
+    marginBottom: 12,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -2420,7 +2490,7 @@ const styles = StyleSheet.create({
   },
 
   // PROMPT
-  promptWrapper: { paddingHorizontal: 16, marginBottom: 16 },
+  promptWrapper: { paddingHorizontal: 16, marginBottom: 10 },
   promptGradient: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2625,11 +2695,17 @@ const styles = StyleSheet.create({
   unifiedEditorBox: {
     backgroundColor: '#F8FAFC',
     borderRadius: 16,
-    padding: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    minHeight: 140,
-    marginVertical: 6,
+    height: 140, // Capped at ~5 lines height so the text field does not grow big
+    maxHeight: 140,
+    marginVertical: 4,
+    width: '100%',
+  },
+  editorScrollContainer: {
+    flex: 1,
     width: '100%',
   },
   committedSegmentsWrap: {
@@ -2659,6 +2735,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     margin: 0,
     textAlignVertical: 'top',
+  },
+  entryContentContainer: {
+    width: '100%',
+  },
+  entryScrollBox: {
+    maxHeight: 240,
   },
   entryMarkdownBody: {
     marginTop: 6,

@@ -108,10 +108,20 @@ async def test_auth_and_full_workflow():
         assert "reply" in chat_data
         assert len(chat_data["reply"]) > 10
 
-        # 9. Rewards Summary
+        # 9. Rewards Summary, Badges & Leaderboard
         rewards_resp = await ac.get("/api/v1/rewards/summary", headers=headers)
         assert rewards_resp.status_code == 200
         assert rewards_resp.json()["total_xp"] > 100
+
+        badges_resp = await ac.get("/api/v1/rewards/badges", headers=headers)
+        assert badges_resp.status_code == 200
+        assert isinstance(badges_resp.json(), list)
+
+        leaderboard_resp = await ac.get("/api/v1/rewards/leaderboard", headers=headers)
+        assert leaderboard_resp.status_code == 200
+        lb_data = leaderboard_resp.json()
+        assert len(lb_data) >= 1
+        assert any("Alex" in item["name"] for item in lb_data)
 
         # 10. Social Feed & Post
         post_payload = {"content": "Hit 7,500 steps already today! #SelfTrack"}
@@ -154,18 +164,40 @@ async def test_auth_and_full_workflow():
         assert settings_data["privacy_hide_leaderboard"] is True
         assert settings_data["dark_mode"] is True
 
-        # 14. Notifications Test (fetch, mark read, mark all read)
+        # 14. Notifications Test (fetch dynamic, create, mark read, mark all read)
         notifs_resp = await ac.get("/api/v1/notifications", headers=headers)
         assert notifs_resp.status_code == 200
         notifs = notifs_resp.json()
-        assert len(notifs) >= 1
-        notif_id = notifs[0]["id"]
+        assert len(notifs) == 0  # Clean dynamic state: 0 notifications initially
+
+        create_notif_resp = await ac.post("/api/v1/notifications", json={
+            "title": "Habit Milestone",
+            "message": "Great job today!",
+            "category": "habits",
+            "icon": "flame",
+            "color": "#FF9500"
+        }, headers=headers)
+        assert create_notif_resp.status_code == 200
+        notif_id = create_notif_resp.json()["id"]
+
+        notifs_resp2 = await ac.get("/api/v1/notifications", headers=headers)
+        assert len(notifs_resp2.json()) == 1
 
         read_resp = await ac.patch(f"/api/v1/notifications/{notif_id}/read", headers=headers)
         assert read_resp.status_code == 200
 
         all_read_resp = await ac.post("/api/v1/notifications/mark-all-read", headers=headers)
         assert all_read_resp.status_code == 200
+
+        # SMS Gateway Dispatch Endpoint Test
+        sms_resp = await ac.post("/api/v1/notifications/send-sms", json={
+            "phone": "+919876543210",
+            "message": "Production SMS Verification Alert"
+        }, headers=headers)
+        assert sms_resp.status_code == 200
+        sms_data = sms_resp.json()
+        assert "provider" in sms_data
+        assert "message" in sms_data
 
         # 15. Change Password Test
         chg_resp = await ac.post("/api/v1/auth/change-password", json={
@@ -262,4 +294,87 @@ async def test_otp_auth_and_journal_update():
         # 5. Delete the journal entry (DELETE)
         del_journal_resp = await ac.delete(f"/api/v1/journals/{journal_id}", headers=headers)
         assert del_journal_resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_phone_pin_auth_and_persistence():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        import uuid
+        test_phone = f"+9198{uuid.uuid4().int % 100000000:08d}"
+        test_name = "Arya Stark"
+        test_pin = "4321"
+
+        # 1. Validation test: missing compulsory name during registration
+        invalid_resp = await ac.post("/api/v1/auth/phone-pin", json={
+            "name": "A",  # Too short
+            "phone": test_phone,
+            "pin": test_pin,
+            "is_registration": True
+        })
+        assert invalid_resp.status_code in (400, 422)
+
+        # 2. Registration / First login: Name, Mobile, and PIN
+        reg_resp = await ac.post("/api/v1/auth/phone-pin", json={
+            "name": test_name,
+            "phone": test_phone,
+            "pin": test_pin,
+            "is_registration": True
+        })
+        assert reg_resp.status_code == 200
+        reg_data = reg_resp.json()
+        assert "access_token" in reg_data
+        assert reg_data["user"]["name"] == test_name
+        assert reg_data["user"]["phone"] == test_phone
+        assert reg_data["user"]["total_xp"] >= 100
+        user_id = reg_data["user"]["id"]
+        token_1 = reg_data["access_token"]
+        headers_1 = {"Authorization": f"Bearer {token_1}"}
+
+        # 3. Create a habit with user 1
+        create_habit_resp = await ac.post("/api/v1/habits", json={
+            "name": "Evening Meditation",
+            "category": "Mindfulness",
+            "icon": "moon",
+            "color": "#6366F1",
+            "streak_target": 7
+        }, headers=headers_1)
+        assert create_habit_resp.status_code == 201
+
+        # 4. Attempt login with INCORRECT PIN
+        wrong_pin_resp = await ac.post("/api/v1/auth/phone-pin", json={
+            "name": test_name,
+            "phone": test_phone,
+            "pin": "9999"  # Wrong PIN
+        })
+        assert wrong_pin_resp.status_code == 401
+        assert "Incorrect PIN" in wrong_pin_resp.json()["detail"]
+
+        # 4b. Attempt login with UNREGISTERED phone number
+        unreg_phone = f"+9197{uuid.uuid4().int % 100000000:08d}"
+        unregistered_resp = await ac.post("/api/v1/auth/phone-pin", json={
+            "phone": unreg_phone,
+            "pin": "1234",
+            "is_registration": False
+        })
+        assert unregistered_resp.status_code == 404
+        assert "No registered account found" in unregistered_resp.json()["detail"]
+
+        # 5. Login again with CORRECT PIN
+        login_resp = await ac.post("/api/v1/auth/phone-pin", json={
+            "name": test_name,
+            "phone": test_phone,
+            "pin": test_pin
+        })
+        assert login_resp.status_code == 200
+        login_data = login_resp.json()
+        assert login_data["user"]["id"] == user_id
+        token_2 = login_data["access_token"]
+        headers_2 = {"Authorization": f"Bearer {token_2}"}
+
+        # 6. Verify previous data is preserved and returned
+        habits_resp = await ac.get("/api/v1/habits", headers=headers_2)
+        assert habits_resp.status_code == 200
+        habits = habits_resp.json()
+        habit_names = [h["name"] for h in habits]
+        assert "Evening Meditation" in habit_names
 
