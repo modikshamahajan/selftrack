@@ -7,22 +7,6 @@ WebSite: https://github.com/modikshamahajan/selftrack
 SourceCode: https://github.com/modikshamahajan/selftrack
 IssueTracker: https://github.com/modikshamahajan/selftrack/issues
 
-AutoName: SelfTrack
-Summary: Privacy-first all-in-one habits, health, journal & AI companion.
-Description: |-
-  SelfTrack is an open-source, privacy-first personal growth companion designed
-  to help you build lasting habits, track daily health metrics, reflect deeply
-  through journaling, and optimize focus.
-
-  Features:
-  * Habit tracking with fractional consistency rings and streaks
-  * Step counter, hydration tracker, and meal energy logging
-  * Menstrual cycle and symptom forecasting
-  * Daily reflections and mood journaling
-  * Pomodoro focus timer with offline ambient soundscapes
-  * XP gamification, achievements, and milestone badges
-  * Completely offline-first with zero tracking or telemetry
-
 RepoType: git
 Repo: https://github.com/modikshamahajan/selftrack.git
 
@@ -31,11 +15,15 @@ Builds:
     versionName: 1.0.0
     commit: 8d4f7d322fa19c690db60013de18a00bde357918
     subdir: android
+    sudo:
+      - apt-get update || true
+      - apt-get install -y nodejs npm
+    init:
+      - cd ..
+      - npm install
     gradle:
-      - assembleRelease
+      - yes
     output: app/build/outputs/apk/release/app-release-unsigned.apk
-    prebuild:
-      - npm ci || npm install
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
