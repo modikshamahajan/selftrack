@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather as Icon, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
 import { BorderRadius, Shadow } from '../theme/spacing';
@@ -102,15 +102,30 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
 
   const localToday = getTodayStr();
   const utcToday = new Date().toISOString().split('T')[0];
-  const todayJournal = journalEntries.find(e => e.date === localToday || e.date === utcToday);
+  const todayJournal = (journalEntries || []).find(e => e && (e.date === localToday || e.date === utcToday));
   const todayMood = todayJournal?.mood;
 
   const menstrualSettings = useMenstrualStore((state) => state.settings);
   const menstrualLogs = useMenstrualStore((state) => state.dailyLogs);
-  const homeCycleInfo = useMemo(
-    () => calculateCycleInfo(localToday, menstrualSettings, menstrualLogs),
-    [localToday, menstrualSettings, menstrualLogs]
-  );
+  const homeCycleInfo = useMemo(() => {
+    try {
+      return calculateCycleInfo(localToday, menstrualSettings, menstrualLogs);
+    } catch {
+      return {
+        cycleDay: 0,
+        phase: 'menstrual',
+        phaseTitle: "Women's Health",
+        phaseDescription: 'Start logging your period or set your last period date to begin tracking.',
+        fertilityChance: 'Low',
+        daysUntilNextPeriod: 0,
+        nextPeriodDate: '--',
+        isPeriodActive: false,
+        themeColor: '#64748B',
+        badgeEmoji: '🌸',
+        isInitialized: false,
+      };
+    }
+  }, [localToday, menstrualSettings, menstrualLogs]);
 
   useFocusEffect(
     useCallback(() => {
@@ -129,23 +144,6 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
     }, [fetchHabits, fetchMetricsByDate, fetchFoodLogs, fetchJournalEntries, fetchRewards, loadSpecialEvents])
   );
 
-  // Animation for celebration badges
-  const badgeScale = useSharedValue(1);
-  useEffect(() => {
-    badgeScale.value = withRepeat(
-      withSequence(
-        withTiming(1.12, { duration: 900, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
-    );
-  }, []);
-
-  const pulsingBadgeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: badgeScale.value }]
-  }));
-
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
   const name = user?.name ? user.name.split(' ')[0] : 'Champion';
@@ -161,22 +159,24 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
   }, [localToday, utcToday]);
 
   const { habitsDone, habitsPercent } = useMemo(() => {
-    const done = habits.filter(isHabitCompletedToday).length;
-    const percent = habits.length > 0 ? Math.round((done / habits.length) * 100) : 0;
+    const list = Array.isArray(habits) ? habits : [];
+    const done = list.filter(isHabitCompletedToday).length;
+    const percent = list.length > 0 ? Math.round((done / list.length) * 100) : 0;
     return { habitsDone: done, habitsPercent: percent };
   }, [habits, isHabitCompletedToday]);
 
   const { todayFoodLogs, todayCalories, foodRatio } = useMemo(() => {
-    const logs = foodLogs.filter(
-      (f) => f.date === localToday || f.date === utcToday || f.date?.startsWith(localToday) || f.date?.startsWith(utcToday)
+    const list = Array.isArray(foodLogs) ? foodLogs : [];
+    const logs = list.filter(
+      (f) => f && (f.date === localToday || f.date === utcToday || f.date?.startsWith?.(localToday) || f.date?.startsWith?.(utcToday))
     );
-    const calories = logs.reduce((sum, f) => sum + ((f.calories || 0) * (typeof f.qty === 'number' ? f.qty : 1)), 0);
+    const calories = logs.reduce((sum, f) => sum + ((f?.calories || 0) * (typeof f?.qty === 'number' ? f.qty : 1)), 0);
     const ratio = Math.min(1, logs.length / 3);
     return { todayFoodLogs: logs, todayCalories: calories, foodRatio: ratio };
   }, [foodLogs, localToday, utcToday]);
 
   const hasJournalToday = useMemo(
-    () => journalEntries.some((e) => e.date === localToday || e.date === utcToday),
+    () => (Array.isArray(journalEntries) ? journalEntries : []).some((e) => e && (e.date === localToday || e.date === utcToday)),
     [journalEntries, localToday, utcToday]
   );
   const journalPercent = hasJournalToday ? 100 : (journalEntries.length > 0 ? 50 : 0);
@@ -260,9 +260,9 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
   };
 
   const unlockedBadges = useMemo(
-    () => badges.filter((b) => b.is_unlocked).map((b) => ({
-      id: b.id.toString(),
-      name: b.title,
+    () => (Array.isArray(badges) ? badges : []).filter((b) => b && b.is_unlocked).map((b) => ({
+      id: (b?.id != null) ? b.id.toString() : Math.random().toString(),
+      name: b.title || 'Badge',
       icon: getValidBadgeIcon(b.image_name),
       color: '#F59E0B',
       isNew: false
@@ -277,22 +277,28 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
 
   // Nearest / Today's Special Event Celebration
   const todayCelebrationEvent = useMemo(() => {
-    const enabledEvents = specialEvents.filter((e) => e.enabled);
-    if (enabledEvents.length === 0) return null;
-    const sorted = [...enabledEvents].sort(
-      (a, b) => getNextOccurrenceDate(a).getTime() - getNextOccurrenceDate(b).getTime()
-    );
-    const nearest = sorted[0];
-    const countdown = getEventCountdownLabel(nearest);
-    if (
-      countdown.isToday ||
-      countdown.label.includes('Tomorrow') ||
-      countdown.label.includes('In 2 days') ||
-      countdown.label.includes('In 3 days')
-    ) {
-      return { event: nearest, countdown };
+    try {
+      const enabledEvents = (Array.isArray(specialEvents) ? specialEvents : []).filter((e) => e && e.enabled);
+      if (enabledEvents.length === 0) return null;
+      const sorted = [...enabledEvents].sort(
+        (a, b) => getNextOccurrenceDate(a).getTime() - getNextOccurrenceDate(b).getTime()
+      );
+      const nearest = sorted[0];
+      if (!nearest) return null;
+      const countdown = getEventCountdownLabel(nearest);
+      if (
+        countdown &&
+        (countdown.isToday ||
+        countdown.label?.includes('Tomorrow') ||
+        countdown.label?.includes('In 2 days') ||
+        countdown.label?.includes('In 3 days'))
+      ) {
+        return { event: nearest, countdown };
+      }
+      return null;
+    } catch {
+      return null;
     }
-    return null;
   }, [specialEvents]);
 
   // Auto-launch celebration modal once on app open if an event is happening Today!
@@ -322,7 +328,7 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
         contentContainerStyle={styles.scrollContent}
       >
         {/* TOP BAR / GREETING */}
-        <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.topBar}>
+        <View style={styles.topBar}>
           <View style={styles.topBarLeft}>
             <View style={styles.brandProfileRow}>
               <View style={styles.appIconWrapper}>
@@ -372,11 +378,11 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               </LinearGradient>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
 
         {/* CELEBRATION SPOTLIGHT BANNER */}
         {todayCelebrationEvent ? (
-          <Animated.View entering={FadeInDown.delay(150).duration(500)} style={styles.celebrationBannerWrapper}>
+          <View style={styles.celebrationBannerWrapper}>
             <TouchableOpacity
               activeOpacity={0.88}
               style={[
@@ -440,11 +446,11 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
                 </View>
               </LinearGradient>
             </TouchableOpacity>
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* HERO LEVEL & XP PROGRESS CARD */}
-        <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <LinearGradient
             colors={['#4F46E5', '#7C3AED', '#9333EA']}
             start={{ x: 0, y: 0 }}
@@ -479,10 +485,10 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               </View>
             </View>
           </LinearGradient>
-        </Animated.View>
+        </View>
 
         {/* VITALITY COMPANION SCORE */}
-        <Animated.View entering={FadeInDown.delay(260).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <LinearGradient
             colors={['#FFFFFF', '#F8FAFC']}
             style={styles.vitalityCard}
@@ -535,10 +541,10 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               </View>
             </View>
           </LinearGradient>
-        </Animated.View>
+        </View>
 
         {/* DAILY QUESTS & MYSTERY CHEST */}
-        <Animated.View entering={FadeInDown.delay(280).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <Card style={styles.questsCard}>
             <View style={styles.questsHeader}>
               <View>
@@ -634,10 +640,10 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               </View>
             )}
           </Card>
-        </Animated.View>
+        </View>
 
         {/* DAILY PROGRESS CIRCLES */}
-        <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Daily Progress</Text>
             <Text style={styles.sectionSubtitle}>Tap to jump in</Text>
@@ -685,10 +691,10 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               </LinearGradient>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
 
         {/* AI ASSISTANT SMART TIP */}
-        <Animated.View entering={FadeInDown.delay(350).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => navigation.navigate('AIChat')}
@@ -711,10 +717,10 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               <Icon name="chevron-right" size={20} color="#C084FC" />
             </LinearGradient>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
 
         {/* TODAY'S HABITS LIST */}
-        <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={styles.sectionTitle}>Today's Focus</Text>
@@ -778,10 +784,10 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               })}
             </Card>
           )}
-        </Animated.View>
+        </View>
 
         {/* TODAY'S METRICS SNAPSHOT */}
-        <Animated.View entering={FadeInDown.delay(450).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Daily Vitals</Text>
           <View style={styles.vitalsGrid}>
             {/* Water */}
@@ -868,10 +874,10 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               <Text style={styles.vitalLabel}>Mind & Mood</Text>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
 
         {/* ACHIEVEMENTS & BADGES */}
-        <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Trophy Showcase 🏆</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Rewards')}>
@@ -891,9 +897,9 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
                   >
                     <Card style={styles.badgeTile}>
                       {isNew ? (
-                        <Animated.View style={[styles.badgeIconWrapper, { backgroundColor: `${badge.color}25` }, pulsingBadgeStyle]}>
+                        <View style={[styles.badgeIconWrapper, { backgroundColor: `${badge.color}25` }]}>
                           <Icon name={badge.icon as any} size={26} color={badge.color} />
-                        </Animated.View>
+                        </View>
                       ) : (
                         <View style={[styles.badgeIconWrapper, { backgroundColor: `${badge.color}18` }]}>
                           <Icon name={badge.icon as any} size={26} color={badge.color} />
@@ -927,10 +933,10 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               </TouchableOpacity>
             </Card>
           )}
-        </Animated.View>
+        </View>
 
         {/* WOMEN'S HEALTH - CYCLE STATUS WIDGET */}
-        <Animated.View entering={FadeInDown.delay(520).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <TouchableOpacity
             activeOpacity={0.88}
             onPress={() => navigation.navigate('MenstrualCycle')}
@@ -971,12 +977,12 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               </View>
             </LinearGradient>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
 
 
 
         {/* QUICK SHORTCUT ACTIONS */}
-        <Animated.View entering={FadeInUp.delay(550).duration(500)} style={[styles.section, { marginBottom: 40 }]}>
+        <View style={[styles.section, { marginBottom: 40 }]}>
           <Text style={styles.sectionTitle}>Quick Shortcuts</Text>
           <View style={styles.quickGrid}>
             <TouchableOpacity
@@ -1045,7 +1051,7 @@ const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, ro
               <Text style={styles.quickLabel}>Cycle</Text>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
 
       </ScrollView>
 
@@ -1923,4 +1929,10 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HomeScreen;
+const HomeScreenWrapper: React.FC<{ navigation: any; route?: any }> = (props) => (
+  <ErrorBoundary fallbackTitle="Home Dashboard">
+    <HomeScreen {...props} />
+  </ErrorBoundary>
+);
+
+export default HomeScreenWrapper;

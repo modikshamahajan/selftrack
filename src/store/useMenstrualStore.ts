@@ -64,11 +64,12 @@ export const getDaysDiff = (startStr: string, endStr: string): number => {
 
 export const calculateCycleInfo = (
   targetDateStr: string,
-  settings: CycleSettings,
+  settings?: CycleSettings,
   logs: Record<string, DailySymptomLog> = {}
 ): CycleDayInfo => {
   // If user has not started or provided any last period date yet, or hasUserEnteredData is false, keep empty at Day 0
   const isUntracked =
+    !settings ||
     settings.hasUserEnteredData === false ||
     !settings.lastPeriodStart ||
     settings.lastPeriodStart.trim() === '';
