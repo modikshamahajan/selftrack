@@ -368,14 +368,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardContainer}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+        enabled={Platform.OS === 'ios'}
       >
         <ScrollView
           ref={scrollViewRef}
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
-          nestedScrollEnabled={true}
         >
           {/* Header Botanical Illustration */}
           <View style={[styles.headerImageContainer, keyboardHeight > 0 && { marginTop: 0, marginBottom: 0 }]}>
@@ -788,10 +789,13 @@ const styles = StyleSheet.create({
   keyboardContainer: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 28,
+    paddingBottom: 36,
     flexGrow: 1,
   },
   headerImageContainer: {
