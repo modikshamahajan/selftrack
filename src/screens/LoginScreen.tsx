@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,6 +48,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
   const [activeErrorField, setActiveErrorField] = useState<'name' | 'phone' | 'pin' | 'confirmPin' | null>(null);
   const [fieldErrorMessages, setFieldErrorMessages] = useState<{ [key: string]: string }>({});
+
+  const scrollViewRef = useRef<any>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height || 280);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const cleanPhone = `${countryCode}${phoneNumber.trim().replace(/\D/g, '')}`;
   const digitsOnly = phoneNumber.trim().replace(/\D/g, '');
@@ -343,25 +364,38 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardContainer}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          ref={scrollViewRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 48 },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          nestedScrollEnabled={true}
+          overScrollMode="always"
         >
           {/* Header Botanical Illustration */}
-          <View style={styles.headerImageContainer}>
+          <View style={[styles.headerImageContainer, keyboardHeight > 0 && { marginTop: 0, marginBottom: 0 }]}>
             <Image
               source={HEADER_LEAF}
-              style={styles.headerLeafImage}
+              style={[
+                styles.headerLeafImage,
+                keyboardHeight > 0 && { width: 80, height: 50 },
+              ]}
               resizeMode="contain"
             />
           </View>
 
           {/* Header Brand Section */}
-          <View style={styles.headerSection}>
-            <Text style={styles.appName}>SelfTrack</Text>
-            <Text style={styles.appTagline}>Mindful Habits • Growth • Wellness</Text>
+          <View style={[styles.headerSection, keyboardHeight > 0 && { marginBottom: 8 }]}>
+            <Text style={[styles.appName, keyboardHeight > 0 && { fontSize: 22 }]}>SelfTrack</Text>
+            {keyboardHeight === 0 && (
+              <Text style={styles.appTagline}>Mindful Habits • Growth • Wellness</Text>
+            )}
           </View>
 
           {/* Card Container */}
@@ -504,6 +538,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                       placeholderTextColor="#94A3B8"
                       value={fullName}
                       editable={!isLoading}
+                      onFocus={() => {
+                        setTimeout(() => {
+                          scrollViewRef.current?.scrollTo({ y: 40, animated: true });
+                        }, 150);
+                      }}
                       onChangeText={(text) => {
                         setFullName(text);
                         if (activeErrorField === 'name') setActiveErrorField(null);
@@ -540,6 +579,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                     placeholderTextColor="#94A3B8"
                     value={phoneNumber}
                     editable={!isLoading}
+                    onFocus={() => {
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollTo({ y: 110, animated: true });
+                      }, 150);
+                    }}
                     onChangeText={(t) => {
                       setPhoneNumber(t.replace(/\D/g, '').slice(0, 10));
                       if (activeErrorField === 'phone') setActiveErrorField(null);
@@ -580,6 +624,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                     placeholderTextColor="#CBD5E1"
                     value={pin.slice(0, 4)}
                     editable={!isLoading}
+                    onFocus={() => {
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 150);
+                    }}
                     onChangeText={(t) => {
                       const sanitized = t.replace(/\D/g, '').slice(0, 4);
                       setPin(sanitized);
@@ -637,6 +686,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                       placeholderTextColor="#CBD5E1"
                       value={confirmPin.slice(0, 4)}
                       editable={!isLoading}
+                      onFocus={() => {
+                        setTimeout(() => {
+                          scrollViewRef.current?.scrollToEnd({ animated: true });
+                        }, 150);
+                      }}
                       onChangeText={(t) => {
                         const sanitized = t.replace(/\D/g, '').slice(0, 4);
                         setConfirmPin(sanitized);
@@ -747,7 +801,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 36,
+    flexGrow: 1,
   },
   headerImageContainer: {
     alignItems: 'center',
