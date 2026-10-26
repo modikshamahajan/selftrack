@@ -29,7 +29,7 @@ Repo: https://github.com/modikshamahajan/selftrack.git
 Builds:
   - versionCode: 5
     versionName: 1.0.0
-    commit: v1.0.0
+    commit: 8d4f7d322fa19c690db60013de18a00bde357918
     subdir: android
     gradle:
       - assembleRelease
