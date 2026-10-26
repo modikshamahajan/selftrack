@@ -17,6 +17,10 @@ echo "Using container engine: $CONTAINER_TOOL"
 $CONTAINER_TOOL stop selftrack-server 2>/dev/null || true
 $CONTAINER_TOOL rm selftrack-server 2>/dev/null || true
 
+# Rebuild backend image with latest code
+echo "Building latest selftrack-backend container image..."
+$CONTAINER_TOOL build -t localhost/selftrack-backend:latest ./backend
+
 ENV_FLAG=""
 if [ -f "$DIR/backend/.env" ]; then
   ENV_FLAG="--env-file $DIR/backend/.env"

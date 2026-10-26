@@ -23,7 +23,7 @@ const getDevHost = (): string => {
     }
   } catch (e) {}
   // Default to machine LAN IP for physical device over local Wi-Fi
-  return '192.168.1.9';
+  return '192.168.1.5';
 };
 
 const devHost = getDevHost();
