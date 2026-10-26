@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import init_db
-from app.routers import auth, users, habits, health, journals, ai, rewards, social, notifications, admin
+from app.routers import auth, users, habits, health, journals, ai, rewards, social, notifications, admin, admin_web
 
 
 @asynccontextmanager
@@ -54,6 +54,7 @@ app.include_router(rewards.router, prefix="/api")
 app.include_router(social.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(admin_web.router)
 
 @app.get("/")
 async def root():

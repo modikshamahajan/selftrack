@@ -5,7 +5,6 @@ import * as Haptics from 'expo-haptics';
 import api from './api';
 import {
   SpecialEvent,
-  SpecialEventType,
   EVENT_TYPE_METAS,
   ADVANCE_NOTICE_LABELS,
 } from '../types/specialEvents';
@@ -302,7 +301,6 @@ export const buildEventNotificationContent = (
   event: SpecialEvent,
   isAdvanceNotice = false
 ): { title: string; body: string } => {
-  const meta = EVENT_TYPE_METAS[event.type] || EVENT_TYPE_METAS.occasion;
   const advanceText = ADVANCE_NOTICE_LABELS[event.reminderAdvance];
 
   let title = '';

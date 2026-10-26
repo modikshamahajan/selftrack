@@ -31,62 +31,23 @@ interface AuthState {
   updateUserXp: (newXp: number, newLevel?: number) => void;
   updateProfile: (updates: { name?: string; avatar_url?: string }) => Promise<UserProfile>;
   continueAsGuest: () => Promise<UserProfile>;
+  hasPendingWelcomeBonus: boolean;
+  setHasPendingWelcomeBonus: (hasBonus: boolean) => void;
   setUser: (user: UserProfile | null) => void;
   setToken: (token: string | null) => void;
 }
 
-export const resetAppDataForNewUser = async () => {
-  const keysToRemove = [
-    'selftrack_habits',
-    'selftrack_completed_routines',
-    'selftrack_journals',
-    'health-storage',
-    'quest-storage',
-    '@selftrack_special_events_v2',
-    'scheduled_reminders',
-    '@selftrack_menstrual_data',
-  ];
-  try {
-    await AsyncStorage.multiRemove(keysToRemove);
-  } catch (_e) { }
-
-  try {
-    const { useHabitStore } = await import('./useHabitStore');
-    await useHabitStore.getState().clearAllHabits();
-  } catch (_e) { }
-
-  try {
-    const { useJournalStore } = await import('./useJournalStore');
-    await useJournalStore.getState().clearAllEntries();
-  } catch (_e) { }
-
-  try {
-    const { useHealthStore } = await import('./useHealthStore');
-    useHealthStore.getState().resetHealthState();
-  } catch (_e) { }
-
-  try {
-    const { useQuestStore } = await import('./useQuestStore');
-    useQuestStore.getState().resetQuests();
-  } catch (_e) { }
-
-  try {
-    const { useNotificationStore } = await import('./useNotificationStore');
-    useNotificationStore.getState().clearNotifications();
-  } catch (_e) { }
-
-  try {
-    const { useSpecialEventStore } = await import('./useSpecialEventStore');
-    await useSpecialEventStore.getState().clearAllEvents();
-  } catch (_e) { }
-};
+import { resetAppDataForNewUser } from './resetAppData';
+export { resetAppDataForNewUser };
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   token: null,
   isLoading: false,
   isAuthenticated: false,
+  hasPendingWelcomeBonus: false,
 
+  setHasPendingWelcomeBonus: (hasBonus) => set({ hasPendingWelcomeBonus: hasBonus }),
   setUser: (user) => set({ user, isAuthenticated: !!user }),
   setToken: (token) => set({ token }),
 
@@ -145,18 +106,25 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const cleanPin = pin.trim().slice(0, 4);
 
     try {
-      const res = await api.post(
-        '/auth/phone-pin',
-        { name, phone, pin: cleanPin, is_registration: isRegistration },
-        { timeout: 1500 }
-      );
+      const res = await api.post('/auth/phone-pin', {
+        name,
+        phone,
+        pin: cleanPin,
+        is_registration: isRegistration,
+      });
       const { access_token, refresh_token, user } = res.data;
 
       if (isRegistration) {
         await resetAppDataForNewUser();
       }
 
-      set({ user, token: access_token, isAuthenticated: true, isLoading: false });
+      set({
+        user,
+        token: access_token,
+        isAuthenticated: true,
+        isLoading: false,
+        hasPendingWelcomeBonus: Boolean(isRegistration),
+      });
 
       try {
         const storedUsersRaw = await AsyncStorage.getItem('selftrack_registered_users');
@@ -226,7 +194,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             const token = 'offline_token_' + Date.now();
             await AsyncStorage.setItem('userToken', token);
             await AsyncStorage.setItem('userProfile', JSON.stringify(newUser));
-            set({ user: newUser, token, isAuthenticated: true, isLoading: false });
+            set({
+              user: newUser,
+              token,
+              isAuthenticated: true,
+              isLoading: false,
+              hasPendingWelcomeBonus: true,
+            });
             return newUser;
           } else {
             if (!existingRecord) {
@@ -300,7 +274,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       }
       await AsyncStorage.setItem('userProfile', JSON.stringify(user));
 
-      set({ user, token: access_token, isAuthenticated: true, isLoading: false });
+      set({
+        user,
+        token: access_token,
+        isAuthenticated: true,
+        isLoading: false,
+        hasPendingWelcomeBonus: true,
+      });
       return user;
     } catch (error) {
       set({ isLoading: false });

@@ -6,7 +6,7 @@ from sqlalchemy import select, and_
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.models import User, HealthMetric, FoodLog
-from app.schemas.schemas import HealthSyncRequest, HealthMetricResponse, FoodLogCreate, FoodLogResponse
+from app.schemas.schemas import HealthSyncRequest, HealthMetricResponse, FoodLogCreate, FoodLogResponse, FoodLogUpdate
 
 router = APIRouter(prefix="/health", tags=["Health & Nutrition"])
 
@@ -151,6 +151,30 @@ async def delete_food_log(
     await db.delete(food)
     await db.commit()
     return {"message": "Food log deleted successfully"}
+
+
+@router.patch("/food/{food_id}", response_model=FoodLogResponse)
+async def update_food_log(
+    food_id: str,
+    req: FoodLogUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    res = await db.execute(
+        select(FoodLog).where(and_(FoodLog.id == food_id, FoodLog.user_id == user.id))
+    )
+    food = res.scalar_one_or_none()
+    if not food:
+        raise HTTPException(status_code=404, detail="Food log not found")
+    if req.calories is not None:
+        food.calories = req.calories
+    if req.qty is not None:
+        food.qty = req.qty
+    if req.serving is not None:
+        food.serving = req.serving
+    await db.commit()
+    await db.refresh(food)
+    return food
 
 
 @router.get("/trends")

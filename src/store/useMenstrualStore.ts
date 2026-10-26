@@ -4,7 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export type CyclePhase = 'menstrual' | 'follicular' | 'ovulation' | 'luteal';
 
 export interface CycleSettings {
-  lastPeriodStart: string; // YYYY-MM-DD
+  lastPeriodStart: string; // YYYY-MM-DD or '' if not entered yet
+  hasUserEnteredData?: boolean;
   previousPeriodStart?: string; // Stored to allow instant undo/revert if clicked by mistake
   cycleLength: number; // default 28 days
   periodDuration: number; // default 5 days
@@ -40,6 +41,7 @@ export interface CycleDayInfo {
   isPeriodActive: boolean;
   themeColor: string;
   badgeEmoji: string;
+  isInitialized: boolean;
 }
 
 export const formatYMD = (d: Date = new Date()): string => {
@@ -65,6 +67,28 @@ export const calculateCycleInfo = (
   settings: CycleSettings,
   logs: Record<string, DailySymptomLog> = {}
 ): CycleDayInfo => {
+  // If user has not started or provided any last period date yet, or hasUserEnteredData is false, keep empty at Day 0
+  const isUntracked =
+    settings.hasUserEnteredData === false ||
+    !settings.lastPeriodStart ||
+    settings.lastPeriodStart.trim() === '';
+
+  if (isUntracked) {
+    return {
+      cycleDay: 0,
+      phase: 'menstrual',
+      phaseTitle: 'No Cycle Data',
+      phaseDescription: 'Start logging your period or set your last period date to begin tracking.',
+      fertilityChance: 'Low',
+      daysUntilNextPeriod: 0,
+      nextPeriodDate: '--',
+      isPeriodActive: false,
+      themeColor: '#64748B',
+      badgeEmoji: '🌸',
+      isInitialized: false,
+    };
+  }
+
   const diff = getDaysDiff(settings.lastPeriodStart, targetDateStr);
   const todayStr = formatYMD(new Date());
   const isPastOrToday = targetDateStr <= todayStr;
@@ -151,6 +175,7 @@ export const calculateCycleInfo = (
     isPeriodActive,
     themeColor,
     badgeEmoji,
+    isInitialized: true,
   };
 };
 
@@ -164,19 +189,15 @@ interface MenstrualState {
   logPeriodToggle: (dateStr: string, flow?: 'spotting' | 'light' | 'medium' | 'heavy') => Promise<void>;
   saveDailyLog: (dateStr: string, log: Partial<DailySymptomLog>) => Promise<void>;
   deleteDailyLog: (dateStr: string) => Promise<void>;
+  clearMenstrualData: () => Promise<void>;
 }
 
-const STORAGE_KEY = 'selftrack_menstrual_cycle_v1';
-
-// Default last period: 12 days ago from today so today displays Ovulation / Follicular with rich data
-const getDefaultLastPeriodStart = (): string => {
-  const d = new Date();
-  d.setDate(d.getDate() - 12);
-  return formatYMD(d);
-};
+const STORAGE_KEY = 'selftrack_menstrual_cycle_v2';
+const LEGACY_STORAGE_KEY = 'selftrack_menstrual_cycle_v1';
 
 const DEFAULT_SETTINGS: CycleSettings = {
-  lastPeriodStart: getDefaultLastPeriodStart(),
+  lastPeriodStart: '',
+  hasUserEnteredData: false,
   cycleLength: 28,
   periodDuration: 5,
   lutealLength: 14,
@@ -186,25 +207,57 @@ const DEFAULT_SETTINGS: CycleSettings = {
 export const useMenstrualStore = create<MenstrualState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   dailyLogs: {},
-  pastPeriods: [
-    {
-      startDate: getDefaultLastPeriodStart(),
-      endDate: formatYMD(new Date(parseYMD(getDefaultLastPeriodStart()).getTime() + 4 * 86400000)),
-      flow: 'medium',
-    },
-  ],
+  pastPeriods: [],
   isLoading: false,
 
   loadState: async () => {
     try {
       set({ isLoading: true });
+      // Remove legacy storage key to purge any old mock/seed data
+      try {
+        await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+      } catch {}
+
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        // Only treat as user-entered if explicitly marked true AND has a non-empty period date
+        const hasUserEntered = Boolean(
+          (parsed.settings?.hasUserEnteredData === true || parsed.hasUserEnteredData === true) &&
+          parsed.settings?.lastPeriodStart &&
+          parsed.settings.lastPeriodStart.trim() !== ''
+        );
+        const cleanLastPeriod = hasUserEntered ? parsed.settings.lastPeriodStart : '';
+        const cleanSettings = {
+          ...DEFAULT_SETTINGS,
+          ...(parsed.settings || {}),
+          lastPeriodStart: cleanLastPeriod,
+          hasUserEnteredData: hasUserEntered,
+        };
+        const cleanPastPeriods = hasUserEntered ? (parsed.pastPeriods || []) : [];
+        const cleanDailyLogs = hasUserEntered ? (parsed.dailyLogs || {}) : {};
         set({
-          settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) },
-          dailyLogs: parsed.dailyLogs || {},
-          pastPeriods: parsed.pastPeriods || get().pastPeriods,
+          settings: cleanSettings,
+          dailyLogs: cleanDailyLogs,
+          pastPeriods: cleanPastPeriods,
+        });
+
+        // Persist clean sanitized state if storage had unverified data
+        if (!hasUserEntered) {
+          await AsyncStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+              settings: cleanSettings,
+              dailyLogs: {},
+              pastPeriods: [],
+            })
+          );
+        }
+      } else {
+        set({
+          settings: DEFAULT_SETTINGS,
+          dailyLogs: {},
+          pastPeriods: [],
         });
       }
     } catch {
@@ -215,7 +268,21 @@ export const useMenstrualStore = create<MenstrualState>((set, get) => ({
   },
 
   updateSettings: async (newSettings) => {
-    const updated = { ...get().settings, ...newSettings };
+    const hasData = newSettings.hasUserEnteredData !== undefined
+      ? newSettings.hasUserEnteredData
+      : Boolean(
+          (newSettings.lastPeriodStart && newSettings.lastPeriodStart.trim() !== '') ||
+          (newSettings.lastPeriodStart === undefined && get().settings.hasUserEnteredData && get().settings.lastPeriodStart)
+        );
+    const cleanLast = hasData
+      ? (newSettings.lastPeriodStart !== undefined ? newSettings.lastPeriodStart : get().settings.lastPeriodStart)
+      : '';
+    const updated = {
+      ...get().settings,
+      ...newSettings,
+      lastPeriodStart: cleanLast,
+      hasUserEnteredData: hasData,
+    };
     set({ settings: updated });
     try {
       await AsyncStorage.setItem(
@@ -238,13 +305,13 @@ export const useMenstrualStore = create<MenstrualState>((set, get) => ({
     const currentCycleInfo = calculateCycleInfo(dateStr, currentSettings, currentLogs);
     const isCurrentlyPeriod = currentCycleInfo.isPeriodActive;
 
-    let updatedSettings = { ...currentSettings };
+    const updatedSettings = { ...currentSettings, hasUserEnteredData: true };
 
     if (!isCurrentlyPeriod) {
       // ── CLICK 1: Start period today ──
-      // Store current lastPeriodStart in previousPeriodStart for instant undo
       updatedSettings.previousPeriodStart = currentSettings.lastPeriodStart;
       updatedSettings.lastPeriodStart = dateStr;
+      updatedSettings.hasUserEnteredData = true;
 
       currentLogs[dateStr] = {
         date: dateStr,
@@ -258,7 +325,6 @@ export const useMenstrualStore = create<MenstrualState>((set, get) => ({
       };
     } else {
       // ── CLICK 2: Turn OFF / Undo / Cancel period ──
-      // Explicitly mark today as non-period
       currentLogs[dateStr] = {
         date: dateStr,
         moods: existing?.moods || [],
@@ -270,13 +336,13 @@ export const useMenstrualStore = create<MenstrualState>((set, get) => ({
         flow: 'none',
       };
 
-      // If lastPeriodStart was set to this date, revert back to previous start date!
+      // If lastPeriodStart was set to this date, revert back to previous start date or empty
       if (currentSettings.lastPeriodStart === dateStr) {
         if (currentSettings.previousPeriodStart && currentSettings.previousPeriodStart !== dateStr) {
           updatedSettings.lastPeriodStart = currentSettings.previousPeriodStart;
         } else {
-          // Revert to default cycle anchor (e.g. 12 days ago)
-          updatedSettings.lastPeriodStart = getDefaultLastPeriodStart();
+          updatedSettings.lastPeriodStart = '';
+          updatedSettings.hasUserEnteredData = false;
         }
         updatedSettings.previousPeriodStart = undefined;
       }
@@ -336,6 +402,17 @@ export const useMenstrualStore = create<MenstrualState>((set, get) => ({
           pastPeriods: get().pastPeriods,
         })
       );
+    } catch {}
+  },
+
+  clearMenstrualData: async () => {
+    set({
+      settings: DEFAULT_SETTINGS,
+      dailyLogs: {},
+      pastPeriods: [],
+    });
+    try {
+      await AsyncStorage.multiRemove([STORAGE_KEY, LEGACY_STORAGE_KEY]);
     } catch {}
   },
 }));

@@ -30,12 +30,31 @@ export interface FeedPost {
 export interface Story {
   id: string;
   user: string;
+  user_avatar?: string;
   text: string;
   image_url?: string;
   time: string;
   expiresAt: number;
   isLiked?: boolean;
 }
+
+export const isTestOrMockPost = (p: any): boolean => {
+  if (!p) return true;
+  const user = (p.user || '').toLowerCase().trim();
+  const content = (p.content || '').toLowerCase();
+  const id = String(p.id || '');
+  if (['post_1', 'post_2'].includes(id)) return true;
+  if (id.startsWith('post_sample_') || id.startsWith('mock_')) return true;
+  if (['alex hero', 'e2e tester', 'e2e two', 'maya lin', 'alex rivera'].includes(user)) return true;
+  if (
+    content.includes('hit 7,500 steps already today! #selftrack') ||
+    content.includes('e2e post #test') ||
+    content.includes('e2e like target')
+  ) {
+    return true;
+  }
+  return false;
+};
 
 interface SocialState {
   posts: FeedPost[];
@@ -46,9 +65,10 @@ interface SocialState {
   likePost: (postId: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
   commentPost: (postId: string, text: string, userName: string) => Promise<void>;
-  addStory: (text: string, userName: string, imageUrl?: string) => void;
+  addStory: (text: string, userName: string, imageUrl?: string, userAvatar?: string) => void;
   likeStory: (storyId: string) => void;
   deleteStory: (storyId: string) => void;
+  resetSocialState: () => void;
 }
 
 export const useSocialStore = create<SocialState>()(
@@ -58,34 +78,40 @@ export const useSocialStore = create<SocialState>()(
   stories: [],
   isLoading: false,
 
+  resetSocialState: () => {
+    set({ posts: [], stories: [], isLoading: false });
+  },
+
   fetchFeed: async () => {
     set({ isLoading: true });
     try {
       const res = await api.get('/social/feed');
       if (Array.isArray(res.data)) {
         set((state) => {
-          // Map backend posts and ensure comment count is strictly accurate
-          const backendPosts: FeedPost[] = res.data.map((p: any) => ({
-            id: p.id,
-            user_id: p.user_id,
-            user: p.user,
-            avatar: p.avatar,
-            time: p.time,
-            content: p.content,
-            hasImage: p.hasImage,
-            image_url: p.image_url,
-            likes: p.likes,
-            comments: Array.isArray(p.commentsList) ? p.commentsList.length : (p.comments || 0),
-            commentsList: p.commentsList || [],
-            achievement: p.achievement,
-            isLiked: p.isLiked || false,
-          }));
+          // Map backend posts, filtering out any test/mock posts
+          const backendPosts: FeedPost[] = res.data
+            .filter((p: any) => !isTestOrMockPost(p))
+            .map((p: any) => ({
+              id: p.id,
+              user_id: p.user_id,
+              user: p.user,
+              avatar: p.avatar,
+              time: p.time,
+              content: p.content,
+              hasImage: p.hasImage,
+              image_url: p.image_url,
+              likes: p.likes,
+              comments: Array.isArray(p.commentsList) ? p.commentsList.length : (p.comments || 0),
+              commentsList: p.commentsList || [],
+              achievement: p.achievement,
+              isLiked: p.isLiked || false,
+            }));
 
-          // Keep any purely local unsynced posts, filtering out any legacy static posts
+          // Keep any purely local unsynced posts, filtering out any legacy static/mock posts
           const localOnly = state.posts.filter(
             (p) =>
+              !isTestOrMockPost(p) &&
               p.id.startsWith('post_') &&
-              !['post_1', 'post_2'].includes(p.id) &&
               !backendPosts.some((bp) => bp.id === p.id)
           );
 
@@ -222,10 +248,11 @@ export const useSocialStore = create<SocialState>()(
       // Retain optimistic comment locally
     }
   },
-  addStory: (text: string, userName: string, imageUrl?: string) => {
+  addStory: (text: string, userName: string, imageUrl?: string, userAvatar?: string) => {
     const newStory: Story = {
-      id: Math.random().toString(),
+      id: 'story_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       user: userName,
+      user_avatar: userAvatar,
       text,
       image_url: imageUrl,
       time: 'Just now',
@@ -249,12 +276,19 @@ export const useSocialStore = create<SocialState>()(
     {
       name: 'social-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       migrate: (persistedState: any) => {
-        if (persistedState && Array.isArray(persistedState.posts)) {
-          persistedState.posts = persistedState.posts.filter(
-            (p: any) => p && !['post_1', 'post_2'].includes(p.id)
-          );
+        if (persistedState) {
+          if (Array.isArray(persistedState.posts)) {
+            persistedState.posts = persistedState.posts.filter(
+              (p: any) => !isTestOrMockPost(p)
+            );
+          }
+          if (Array.isArray(persistedState.stories)) {
+            persistedState.stories = persistedState.stories.filter(
+              (s: any) => s && s.expiresAt && s.expiresAt > Date.now()
+            );
+          }
         }
         return persistedState;
       },

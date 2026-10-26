@@ -3,8 +3,6 @@
  * Uses the 4 onboarding colors in a cycling pattern for visual consistency
  */
 
-import { Colors } from './colors';
-
 export const ONBOARDING_BG_COLORS = [
   '#EBF8F0', // Green (Slide 1)
   '#FDF4EE', // Peach (Slide 2)

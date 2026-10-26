@@ -10,7 +10,7 @@ import {
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
+import { BorderRadius, Shadow } from '../theme/spacing';
 
 interface PinLockModalProps {
   visible: boolean;

@@ -6,10 +6,10 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
-  StatusBar,
   TouchableWithoutFeedback,
   Platform,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, {
   Path,
@@ -299,7 +299,7 @@ const SplashScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+      <StatusBar style="dark" />
 
       {/* ── Background blobs / waves ── */}
       <TopRightBlob />

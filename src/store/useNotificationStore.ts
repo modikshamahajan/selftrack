@@ -21,7 +21,7 @@ interface NotificationState {
   clearNotifications: () => void;
 }
 
-export const useNotificationStore = create<NotificationState>((set, get) => ({
+export const useNotificationStore = create<NotificationState>((set) => ({
   notifications: [],
   isLoading: false,
 

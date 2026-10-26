@@ -153,7 +153,7 @@ export const useQuestStore = create<QuestState>()(
       syncDailyQuests: ({ habits = [], waterGlasses, habitsDone, steps, hasJournal }) => {
         const todayStr = getLocalTodayDateString();
         let currentQuests = get().quests;
-        let isNewDay = get().date !== todayStr;
+        const isNewDay = get().date !== todayStr;
 
         if (isNewDay || !currentQuests || currentQuests.length === 0) {
           currentQuests = generateDailyQuests(todayStr, habits);

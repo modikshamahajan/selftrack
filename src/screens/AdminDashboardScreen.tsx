@@ -6,22 +6,20 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  FlatList,
   TextInput,
   Modal,
   Alert,
   Platform,
   RefreshControl,
-  Dimensions,
+  Linking,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { Feather as Icon } from '@expo/vector-icons';
-import api from '../services/api';
+import api, { DEFAULT_BASE_URL } from '../services/api';
 import { Colors } from '../theme/colors';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { safeGoBack } from '../utils/navigation';
 
 type Nav = StackNavigationProp<RootStackParamList, 'AdminDashboard'>;
 interface Props {
@@ -287,7 +285,7 @@ const AdminDashboardScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('@admin_token');
-    navigation.goBack();
+    safeGoBack(navigation, 'MainTabs', { screen: 'Profile' });
   };
 
   const handleOpenUserDetail = async (userId: string) => {
@@ -521,7 +519,7 @@ const AdminDashboardScreen: React.FC<Props> = ({ navigation }) => {
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => safeGoBack(navigation, 'MainTabs', { screen: 'Profile' })}
             style={styles.headerBtn}
             accessibilityLabel="Back"
           >
@@ -533,6 +531,18 @@ const AdminDashboardScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => {
+              const url = DEFAULT_BASE_URL.replace(/\/api\/v1\/?$/, '/admin');
+              Linking.openURL(url).catch(() => {
+                Alert.alert('Web Admin Portal', `Open in your browser:\n${url}`);
+              });
+            }}
+            style={[styles.headerBtn, { backgroundColor: '#EEF2FF' }]}
+            accessibilityLabel="Open in Browser"
+          >
+            <Icon name="globe" size={18} color="#6366F1" />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setBroadcastModalVisible(true)}
             style={styles.headerBtn}
@@ -650,6 +660,32 @@ const AdminDashboardScreen: React.FC<Props> = ({ navigation }) => {
         {/* ==================== TAB 1: OVERVIEW ==================== */}
         {currentTab === 'overview' && (
           <View>
+            {/* Live Web Database Browser Card */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => {
+                const url = DEFAULT_BASE_URL.replace(/\/api\/v1\/?$/, '/admin');
+                Linking.openURL(url).catch(() => {
+                  Alert.alert('Web Admin Portal', `Open in your browser:\n${url}`);
+                });
+              }}
+              style={styles.webPortalCard}
+            >
+              <View style={styles.webPortalIconContainer}>
+                <Icon name="globe" size={24} color="#6366F1" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.webPortalTitle}>Web Database & Admin Portal</Text>
+                <Text style={styles.webPortalSubtitle}>
+                  View all raw SQLite tables, users, habits & logs in your browser
+                </Text>
+                <Text style={styles.webPortalUrl}>
+                  {DEFAULT_BASE_URL.replace(/\/api\/v1\/?$/, '/admin')}
+                </Text>
+              </View>
+              <Icon name="external-link" size={18} color="#6366F1" />
+            </TouchableOpacity>
+
             <Text style={styles.sectionTitle}>Key Performance Indicators</Text>
             <View style={styles.statsGrid}>
               <StatCard
@@ -2052,6 +2088,46 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFF',
+  },
+  webPortalCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    shadowColor: '#6366F1',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  webPortalIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#E0E7FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webPortalTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3730A3',
+  },
+  webPortalSubtitle: {
+    fontSize: 12,
+    color: '#4F46E5',
+    marginTop: 2,
+  },
+  webPortalUrl: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#6366F1',
+    marginTop: 4,
+    fontWeight: '600',
   },
 });
 

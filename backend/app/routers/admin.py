@@ -7,6 +7,7 @@ from sqlalchemy import select, func, desc, or_
 
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token
+from app.core.deps import get_current_admin
 from app.models.models import (
     Admin, User, Habit, HabitLog, HealthMetric, JournalEntry, FoodLog, AppDownload, Notification
 )
@@ -79,7 +80,11 @@ def determine_user_status(last_active_at: Optional[datetime], created_at: dateti
 
 
 @router.get("/dashboard", response_model=AdminDashboardStats)
-async def get_dashboard(period: str = Query("all", description="today | 7d | 30d | all"), db: AsyncSession = Depends(get_db)):
+async def get_dashboard(
+    period: str = Query("all", description="today | 7d | 30d | all"),
+    db: AsyncSession = Depends(get_db),
+    admin: Admin = Depends(get_current_admin),
+):
     now = datetime.now(timezone.utc)
     
     # 1. Total counts
@@ -243,7 +248,8 @@ async def list_users(
     sort_by: str = Query("created_at", description="created_at | total_xp | streak_count | last_active_at"),
     limit: int = 50,
     offset: int = 0,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    admin: Admin = Depends(get_current_admin),
 ):
     query = select(User)
 
@@ -302,7 +308,11 @@ async def list_users(
 
 
 @router.get("/users/{user_id}", response_model=UserFullProfile)
-async def get_user_detail(user_id: str, db: AsyncSession = Depends(get_db)):
+async def get_user_detail(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: Admin = Depends(get_current_admin),
+):
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
@@ -380,7 +390,11 @@ async def get_user_detail(user_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/broadcast")
-async def broadcast_notification(req: BroadcastNotificationRequest, db: AsyncSession = Depends(get_db)):
+async def broadcast_notification(
+    req: BroadcastNotificationRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Admin = Depends(get_current_admin),
+):
     # Fetch target users
     query = select(User)
     now = datetime.now(timezone.utc)
@@ -410,3 +424,121 @@ async def broadcast_notification(req: BroadcastNotificationRequest, db: AsyncSes
 
     await db.commit()
     return {"status": "success", "recipients_count": count}
+
+
+@router.get("/all-habits")
+async def get_all_habits(
+    db: AsyncSession = Depends(get_db),
+    admin: Admin = Depends(get_current_admin),
+):
+    """Returns all habits created across all users in the system."""
+    query = (
+        select(Habit, User.name.label("user_name"), User.email.label("user_email"))
+        .outerjoin(User, Habit.user_id == User.id)
+        .order_by(desc(Habit.created_at))
+        .limit(200)
+    )
+    res = await db.execute(query)
+    rows = res.all()
+    return [
+        {
+            "id": h.id,
+            "name": h.name,
+            "category": h.category,
+            "icon": h.icon,
+            "color": h.color,
+            "current_streak": h.current_streak,
+            "best_streak": h.best_streak,
+            "is_archived": h.is_archived,
+            "created_at": h.created_at.isoformat() if h.created_at else None,
+            "user_id": h.user_id,
+            "user_name": user_name or "Unknown",
+            "user_email": user_email or "",
+        }
+        for h, user_name, user_email in rows
+    ]
+
+
+@router.get("/all-food-logs")
+async def get_all_food_logs(
+    db: AsyncSession = Depends(get_db),
+    admin: Admin = Depends(get_current_admin),
+):
+    """Returns all food entries logged by all users."""
+    query = (
+        select(FoodLog, User.name.label("user_name"), User.email.label("user_email"))
+        .outerjoin(User, FoodLog.user_id == User.id)
+        .order_by(desc(FoodLog.date))
+        .limit(200)
+    )
+    res = await db.execute(query)
+    rows = res.all()
+    return [
+        {
+            "id": fl.id,
+            "name": fl.name,
+            "qty": fl.qty,
+            "calories": fl.calories,
+            "serving": fl.serving,
+            "category": fl.category,
+            "date": fl.date,
+            "user_id": fl.user_id,
+            "user_name": user_name or "Unknown",
+            "user_email": user_email or "",
+        }
+        for fl, user_name, user_email in rows
+    ]
+
+
+ALLOWED_TABLES = {
+    "users": User,
+    "habits": Habit,
+    "habit_logs": HabitLog,
+    "health_metrics": HealthMetric,
+    "food_logs": FoodLog,
+    "journal_entries": JournalEntry,
+    "admins": Admin,
+    "app_downloads": AppDownload,
+}
+
+
+@router.get("/table-records")
+async def get_table_records(
+    table: str = Query("users"),
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    admin: Admin = Depends(get_current_admin),
+):
+    """Inspects any allowed table directly from the SQLite database."""
+    if table not in ALLOWED_TABLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Table '{table}' not supported. Options: {list(ALLOWED_TABLES.keys())}"
+        )
+
+    model = ALLOWED_TABLES[table]
+    total_count = await db.scalar(select(func.count()).select_from(model)) or 0
+    query = select(model).limit(limit)
+    res = await db.execute(query)
+    items = res.scalars().all()
+
+    columns = [c.name for c in model.__table__.columns]
+    records = []
+    for item in items:
+        row = {}
+        for col in columns:
+            val = getattr(item, col)
+            if isinstance(val, datetime):
+                row[col] = val.isoformat()
+            else:
+                row[col] = val
+        records.append(row)
+
+    return {
+        "table": table,
+        "total_records": total_count,
+        "columns": columns,
+        "records": records,
+        "available_tables": list(ALLOWED_TABLES.keys()),
+    }
+

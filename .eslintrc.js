@@ -1,0 +1,31 @@
+module.exports = {
+  root: true,
+  parser: '@typescript-eslint/parser',
+  plugins: ['@typescript-eslint'],
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+  ],
+  ignorePatterns: [
+    'node_modules/',
+    'backend/',
+    'android/',
+    'ios/',
+    '.expo/',
+    'scripts/',
+    'dist/',
+    'web-build/',
+    '*.config.js',
+    'babel.config.js',
+    'metro.config.js',
+  ],
+  rules: {
+    '@typescript-eslint/no-explicit-any': 'off',
+    '@typescript-eslint/no-var-requires': 'off',
+    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    '@typescript-eslint/no-require-imports': 'off',
+    'no-empty': 'off',
+    'no-undef': 'off',
+    'prefer-const': 'error',
+  },
+};

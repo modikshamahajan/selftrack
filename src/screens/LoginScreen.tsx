@@ -10,7 +10,6 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
-  Dimensions,
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,14 +24,13 @@ import { useAuthStore } from '../store/useAuthStore';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
-const { width } = Dimensions.get('window');
 const HEADER_LEAF = require('../../assets/Images/headerleaf.png');
 
 const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) => {
   const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [countryCode, setCountryCode] = useState('+91');
+  const countryCode = '+91';
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [showPin, setShowPin] = useState(false);
@@ -45,6 +43,16 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
   const cleanPhone = `${countryCode}${phoneNumber.trim().replace(/\D/g, '')}`;
   const digitsOnly = phoneNumber.trim().replace(/\D/g, '');
 
+  const clearFormFields = () => {
+    setFullName('');
+    setPhoneNumber('');
+    setPin('');
+    setConfirmPin('');
+    setAuthErrorMessage(null);
+    setActiveErrorField(null);
+    setFieldErrorMessages({});
+  };
+
   const handleTabChange = (mode: 'signin' | 'register') => {
     if (isLoading) return;
     if (mode !== authMode) {
@@ -52,11 +60,7 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
         Haptics.selectionAsync().catch(() => {});
       } catch {}
       setAuthMode(mode);
-      setPin('');
-      setConfirmPin('');
-      setAuthErrorMessage(null);
-      setActiveErrorField(null);
-      setFieldErrorMessages({});
+      clearFormFields();
     }
   };
 
@@ -221,10 +225,14 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
         cleanPin,
         authMode === 'register'
       );
+      if (authMode === 'register') {
+        useAuthStore.getState().setHasPendingWelcomeBonus(true);
+      }
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       } catch {}
-      navigation.replace('MainTabs');
+      setIsLoading(false);
+      navigation.replace('MainTabs', { showWelcomeBonus: authMode === 'register' });
     } catch (error: any) {
       console.error(error);
       try {
@@ -248,9 +256,7 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
               style: 'default',
               onPress: () => {
                 setAuthMode('register');
-                setConfirmPin('');
-                setAuthErrorMessage(null);
-                setActiveErrorField(null);
+                clearFormFields();
               },
             },
           ]);
@@ -270,9 +276,7 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
               style: 'default',
               onPress: () => {
                 setAuthMode('register');
-                setConfirmPin('');
-                setAuthErrorMessage(null);
-                setActiveErrorField(null);
+                clearFormFields();
               },
             },
           ]);
@@ -289,9 +293,7 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
               style: 'default',
               onPress: () => {
                 setAuthMode('signin');
-                setConfirmPin('');
-                setAuthErrorMessage(null);
-                setActiveErrorField(null);
+                clearFormFields();
               },
             },
           ]);
@@ -438,9 +440,7 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
                     <TouchableOpacity
                       onPress={() => {
                         setAuthMode('register');
-                        setConfirmPin('');
-                        setAuthErrorMessage(null);
-                        setActiveErrorField(null);
+                        clearFormFields();
                       }}
                       disabled={isLoading}
                       style={styles.errorBannerAction}
@@ -455,9 +455,7 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
                       <TouchableOpacity
                         onPress={() => {
                           setAuthMode('signin');
-                          setConfirmPin('');
-                          setAuthErrorMessage(null);
-                          setActiveErrorField(null);
+                          clearFormFields();
                         }}
                         disabled={isLoading}
                         style={styles.errorBannerAction}
@@ -725,6 +723,7 @@ const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) =
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
     </SafeAreaView>
   );
 };
@@ -1039,6 +1038,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#065F46',
   },
+
 });
 
 export default LoginScreen;

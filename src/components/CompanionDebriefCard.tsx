@@ -1,8 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Feather as Icon, Ionicons } from '@expo/vector-icons';
+import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '../theme/colors';
 import { Shadow } from '../theme/spacing';
 
 interface CompanionDebriefCardProps {

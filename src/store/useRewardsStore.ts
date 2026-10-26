@@ -36,18 +36,19 @@ interface RewardsState {
   leaderboard: LeaderboardItem[];
   isLoading: boolean;
   fetchRewards: () => Promise<void>;
+  resetRewardsState: () => void;
 }
 
-const DEFAULT_SUMMARY: RewardSummary = {
-  total_xp: 350,
+export const DEFAULT_SUMMARY: RewardSummary = {
+  total_xp: 0,
   level: 1,
-  current_level_xp: 350,
+  current_level_xp: 0,
   next_level_xp: 1000,
   streak_count: 0,
-  badges_count: 2,
+  badges_count: 0,
 };
 
-const DEFAULT_BADGES: BadgeItem[] = [
+export const DEFAULT_BADGES: BadgeItem[] = [
   {
     id: 1,
     slug: 'first-step',
@@ -55,8 +56,7 @@ const DEFAULT_BADGES: BadgeItem[] = [
     description: 'Complete your first habit check-in.',
     image_name: 'goldstar.png',
     xp_reward: 50,
-    is_unlocked: true,
-    unlocked_at: new Date().toISOString(),
+    is_unlocked: false,
   },
   {
     id: 2,
@@ -65,8 +65,7 @@ const DEFAULT_BADGES: BadgeItem[] = [
     description: 'Log 8 glasses of water in a single day.',
     image_name: 'waterdropicon.png',
     xp_reward: 100,
-    is_unlocked: true,
-    unlocked_at: new Date().toISOString(),
+    is_unlocked: false,
   },
   {
     id: 3,
@@ -88,18 +87,27 @@ const DEFAULT_BADGES: BadgeItem[] = [
   },
 ];
 
-const DEFAULT_LEADERBOARD: LeaderboardItem[] = [
+export const DEFAULT_LEADERBOARD: LeaderboardItem[] = [
   { rank: 1, name: 'Aria Stark', xp: '4,250 XP', avatar: '', bg: '#FDF2E9' },
   { rank: 2, name: 'David Miller', xp: '3,800 XP', avatar: '', bg: '#EBF5FB' },
   { rank: 3, name: 'Elena Rostova', xp: '2,950 XP', avatar: '', bg: '#EAFAF1' },
-  { rank: 4, name: 'You (Explorer)', xp: '350 XP', avatar: '', bg: '#FEF9E7' },
+  { rank: 4, name: 'You (Explorer)', xp: '0 XP', avatar: '', bg: '#FEF9E7' },
 ];
 
-export const useRewardsStore = create<RewardsState>((set, get) => ({
+export const useRewardsStore = create<RewardsState>((set) => ({
   summary: DEFAULT_SUMMARY,
   badges: DEFAULT_BADGES,
   leaderboard: DEFAULT_LEADERBOARD,
   isLoading: false,
+
+  resetRewardsState: () => {
+    set({
+      summary: DEFAULT_SUMMARY,
+      badges: DEFAULT_BADGES,
+      leaderboard: DEFAULT_LEADERBOARD,
+      isLoading: false,
+    });
+  },
 
   fetchRewards: async () => {
     set({ isLoading: true });

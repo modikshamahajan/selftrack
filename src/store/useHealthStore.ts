@@ -42,6 +42,9 @@ interface HealthState {
   fetchFoodLogs: (date?: string) => Promise<void>;
   addFoodLog: (item: { name: string; qty: number; calories: number; serving?: string; category?: string; date?: string; image_url?: string }) => Promise<void>;
   deleteFoodLog: (id: string) => Promise<void>;
+  updateFoodCalories: (id: string, calories: number) => void;
+  updateFoodLogItem: (id: string, updates: { calories?: number; qty?: number; serving?: string }) => void;
+  clearFoodLogsForDate: (date: string) => Promise<void>;
   fetchTrends: () => Promise<void>;
   updateSleep: (hours: number, quality: number, date?: string) => Promise<void>;
   addCustomFoodItem: (name: string, cal: number, category: string, image_url?: string) => void;
@@ -266,19 +269,26 @@ export const useHealthStore = create<HealthState>()(
         const todayStr = getLocalTodayDateString();
         const targetDate = item.date || todayStr;
         const tempId = `food-${Date.now()}`;
+        const cleanImageUrl = typeof item.image_url === 'string' ? item.image_url : '';
         const optimisticFood = {
           id: tempId,
           date: targetDate,
           name: item.name,
-          qty: item.qty,
-          calories: item.calories,
+          qty: item.qty || 1,
+          calories: item.calories || 0,
           serving: item.serving || '',
           category: item.category || '',
-          image_url: item.image_url || '',
+          image_url: cleanImageUrl,
         };
 
         set((state) => ({
-          foodLogs: [optimisticFood, ...state.foodLogs],
+          foodLogs: [
+            optimisticFood,
+            ...(state.foodLogs || []).map((f: any) => ({
+              ...f,
+              image_url: typeof f.image_url === 'string' ? f.image_url : '',
+            })),
+          ],
         }));
 
         const authUser = useAuthStore.getState().user;
@@ -307,6 +317,43 @@ export const useHealthStore = create<HealthState>()(
           await api.delete(`/health/food/${id}`);
         } catch (err) {
           // Offline fallback: retain deletion locally
+        }
+      },
+
+      updateFoodLogItem: (id: string, updates: { calories?: number; qty?: number; serving?: string }) => {
+        set((state) => ({
+          foodLogs: state.foodLogs.map((f) => {
+            if (f.id !== id) return f;
+            const newCal = updates.calories !== undefined ? Math.max(0, Math.round(updates.calories)) : f.calories;
+            const newQty = updates.qty !== undefined ? Math.max(0, Math.round(updates.qty)) : (typeof f.qty === 'number' ? f.qty : 1);
+            const newServing = updates.serving !== undefined ? updates.serving : f.serving;
+            return { ...f, calories: newCal, qty: newQty, serving: newServing };
+          }),
+        }));
+
+        try {
+          const payload: any = {};
+          if (updates.calories !== undefined) payload.calories = Math.max(0, Math.round(updates.calories));
+          if (updates.qty !== undefined) payload.qty = Math.max(1, Math.round(updates.qty));
+          if (updates.serving !== undefined) payload.serving = updates.serving;
+          api.patch(`/health/food/${id}`, payload).catch(() => {});
+        } catch {}
+      },
+
+      updateFoodCalories: (id: string, calories: number) => {
+        get().updateFoodLogItem(id, { calories });
+      },
+
+      clearFoodLogsForDate: async (date: string) => {
+        const toDelete = (get().foodLogs || []).filter((f) => f.date === date || f.date?.startsWith(date));
+        set((state) => ({
+          foodLogs: (state.foodLogs || []).filter((f) => !(f.date === date || f.date?.startsWith(date))),
+        }));
+
+        for (const item of toDelete) {
+          try {
+            api.delete(`/health/food/${item.id}`).catch(() => {});
+          } catch {}
         }
       },
 
@@ -401,6 +448,20 @@ export const useHealthStore = create<HealthState>()(
     {
       name: 'health-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      onRehydrateStorage: () => (state) => {
+        if (state?.foodLogs && Array.isArray(state.foodLogs)) {
+          state.foodLogs = state.foodLogs.map((f: any) => ({
+            ...f,
+            image_url: typeof f.image_url === 'string' ? f.image_url : '',
+          }));
+        }
+        if (state) {
+          const currentToday = getLocalTodayDateString();
+          if (state.metrics && state.metrics.date !== currentToday) {
+            state.metrics = state.dailyMetrics?.[currentToday] || createDefaultMetricsForDate(currentToday);
+          }
+        }
+      },
     }
   )
 );

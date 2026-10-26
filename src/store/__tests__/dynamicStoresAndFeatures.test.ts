@@ -23,16 +23,18 @@ jest.mock('react-native/Libraries/Linking/Linking', () => ({
 }));
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSocialStore } from '../useSocialStore';
+import { useSocialStore, isTestOrMockPost } from '../useSocialStore';
 import { useSpecialEventStore } from '../useSpecialEventStore';
 import { useNotificationStore } from '../useNotificationStore';
-import { useAuthStore } from '../useAuthStore';
+import { useAuthStore, resetAppDataForNewUser } from '../useAuthStore';
 import { useHealthStore } from '../useHealthStore';
 import { useJournalStore } from '../useJournalStore';
+import { useHabitStore } from '../useHabitStore';
+import { useQuestStore } from '../useQuestStore';
+import { getScheduledReminders } from '../../services/notifications';
 import { calculateCycleInfo } from '../useMenstrualStore';
 import {
   getStoredSpecialEvents,
-  saveAllSpecialEvents,
   triggerInstantTestSms,
   buildSmsPreviewMessage,
   getNextOccurrenceDate,
@@ -117,6 +119,30 @@ describe('Dynamic Production Features & Edge Cases', () => {
       expect(updated.commentsList?.length).toBe(1);
       expect(updated.commentsList?.[0].text).toBe('Looks delicious! 🥗');
       expect(updated.commentsList?.[0].user).toBe('Alex');
+    });
+
+    it('identifies and filters legacy or test posts accurately with isTestOrMockPost', () => {
+      expect(isTestOrMockPost({ id: 'post_1', user: 'Maya Lin', content: 'hello' })).toBe(true);
+      expect(isTestOrMockPost({ id: 'post_123', user: 'Alex Hero', content: 'Hit 7,500 steps already today! #SelfTrack' })).toBe(true);
+      expect(isTestOrMockPost({ id: 'post_456', user: 'E2E Tester', content: 'E2E post #test' })).toBe(true);
+      expect(isTestOrMockPost({ id: 'post_real', user: 'Sarah Connor', content: 'Ran 10k today in the park!' })).toBe(false);
+    });
+
+    it('attaches user_avatar dynamically to new stories', () => {
+      const { addStory } = useSocialStore.getState();
+      addStory('Evening yoga flow 🌙', 'Jordan Smith', undefined, 'https://example.com/avatar.jpg');
+
+      const stories = useSocialStore.getState().stories;
+      expect(stories[0].user_avatar).toBe('https://example.com/avatar.jpg');
+    });
+
+    it('resets social state completely on resetSocialState', () => {
+      const { resetSocialState } = useSocialStore.getState();
+      resetSocialState();
+
+      expect(useSocialStore.getState().posts).toEqual([]);
+      expect(useSocialStore.getState().stories).toEqual([]);
+      expect(useSocialStore.getState().isLoading).toBe(false);
     });
   });
 
@@ -402,6 +428,154 @@ describe('Dynamic Production Features & Edge Cases', () => {
       expect(splitLines[2]).toBe('');
       expect(splitLines[3]).toBe('');
       expect(splitLines[4]).toBe('Second Paragraph with 4 lines gap');
+    });
+  });
+
+  describe('New User Clean Slate & Fresh Starts', () => {
+    it('initializes journal store with 0 entries and purges legacy journal_1', async () => {
+      await AsyncStorage.setItem('selftrack_journals', JSON.stringify([
+        { id: 'journal_1', title: 'Legacy test' }
+      ]));
+      await useJournalStore.getState().fetchEntries();
+      expect(useJournalStore.getState().entries).toEqual([]);
+      expect(useJournalStore.getState().entries.length).toBe(0);
+    });
+
+    it('initializes habit store with 0 habits and purges legacy dummy habits', async () => {
+      await AsyncStorage.setItem('selftrack_habits', JSON.stringify([
+        { id: 'habit_1', name: 'Drink water' },
+        { id: 'habit_2', name: 'Walk' }
+      ]));
+      await useHabitStore.getState().fetchHabits();
+      expect(useHabitStore.getState().habits).toEqual([]);
+      expect(useHabitStore.getState().habits.length).toBe(0);
+    });
+
+    it('has all default scheduled reminders disabled (enabled: false)', async () => {
+      const reminders = await getScheduledReminders();
+      expect(reminders.length).toBeGreaterThan(0);
+      reminders.forEach((r) => {
+        expect(r.enabled).toBe(false);
+      });
+    });
+
+    it('initializes daily quests with incomplete progress (0/1)', () => {
+      useQuestStore.getState().resetQuests();
+      const quests = useQuestStore.getState().quests;
+      expect(quests.length).toBeGreaterThan(0);
+      quests.forEach((q) => {
+        expect(q.completed).toBe(false);
+        expect(q.current).toBe(0);
+      });
+    });
+
+    it('resetAppDataForNewUser completely purges user caches and resets stores', async () => {
+      useHabitStore.setState({ habits: [{ id: 'user_h1', name: 'Custom', completed: true } as any] });
+      useJournalStore.setState({ entries: [{ id: 'user_j1', title: 'My Note' } as any] });
+      useHealthStore.setState({ metrics: { water_glasses: 5, steps: 4000 } as any });
+      useNotificationStore.setState({ notifications: [{ id: 'notif_1', title: 'Test' } as any] });
+
+      await resetAppDataForNewUser();
+
+      expect(useHabitStore.getState().habits).toEqual([]);
+      expect(useJournalStore.getState().entries).toEqual([]);
+      expect(useHealthStore.getState().metrics.water_glasses).toBe(0);
+      expect(useHealthStore.getState().metrics.steps).toBe(0);
+      expect(useNotificationStore.getState().notifications).toEqual([]);
+    });
+
+    it('handles hasPendingWelcomeBonus state for new user registration and HomeScreen consumption', async () => {
+      // Initially false
+      useAuthStore.setState({ hasPendingWelcomeBonus: false });
+      expect(useAuthStore.getState().hasPendingWelcomeBonus).toBe(false);
+
+      // Explicitly set on registration
+      useAuthStore.getState().setHasPendingWelcomeBonus(true);
+      expect(useAuthStore.getState().hasPendingWelcomeBonus).toBe(true);
+
+      // Consumed when HomeScreen mounts/shows alert
+      useAuthStore.getState().setHasPendingWelcomeBonus(false);
+      expect(useAuthStore.getState().hasPendingWelcomeBonus).toBe(false);
+    });
+
+    it('menstrual cycle defaults to Day 0 and empty countdown for new untracked user', () => {
+      const untrackedSettings = {
+        lastPeriodStart: '',
+        hasUserEnteredData: false,
+        cycleLength: 28,
+        periodDuration: 5,
+        lutealLength: 14,
+        notificationsEnabled: true,
+      };
+
+      const info = calculateCycleInfo('2026-10-24', untrackedSettings, {});
+      expect(info.cycleDay).toBe(0);
+      expect(info.isInitialized).toBe(false);
+      expect(info.isPeriodActive).toBe(false);
+      expect(info.daysUntilNextPeriod).toBe(0);
+      expect(info.nextPeriodDate).toBe('--');
+      expect(info.phaseTitle).toBe('No Cycle Data');
+
+      // Crucial: A previous date (such as 2026-10-19) must NOT be considered active period when untracked
+      const prevDateInfo = calculateCycleInfo('2026-10-19', untrackedSettings, {});
+      expect(prevDateInfo.cycleDay).toBe(0);
+      expect(prevDateInfo.isInitialized).toBe(false);
+      expect(prevDateInfo.isPeriodActive).toBe(false);
+    });
+
+    it('clearMenstrualData resets state to Day 0 untracked defaults', async () => {
+      const { useMenstrualStore } = require('../useMenstrualStore');
+      await useMenstrualStore.getState().logPeriodToggle('2026-10-24', 'heavy');
+      expect(useMenstrualStore.getState().settings.hasUserEnteredData).toBe(true);
+
+      await useMenstrualStore.getState().clearMenstrualData();
+      const state = useMenstrualStore.getState();
+      expect(state.settings.lastPeriodStart).toBe('');
+      expect(state.settings.hasUserEnteredData).toBe(false);
+      expect(state.pastPeriods).toEqual([]);
+      expect(state.dailyLogs).toEqual({});
+    });
+
+    it('food logging supports custom portion quantity and calibrated calories', async () => {
+      const store = useHealthStore.getState();
+      store.addCustomFoodItem('quinoa bowl', 280, 'Meals');
+
+      expect(useHealthStore.getState().customCalorieDb['quinoa bowl']).toEqual(
+        expect.objectContaining({
+          calories: 280,
+          serving: '1 portion',
+        })
+      );
+    });
+
+    it('prevents adding duplicate habit with case and whitespace trimming', async () => {
+      useHabitStore.setState({ habits: [] });
+      const h1 = await useHabitStore.getState().addHabit({ name: 'Morning Meditation' });
+      expect(useHabitStore.getState().habits.length).toBe(1);
+
+      // Attempt adding same habit again with mixed case / whitespace
+      const h2 = await useHabitStore.getState().addHabit({ name: '  morning meditation  ' });
+      expect(useHabitStore.getState().habits.length).toBe(1);
+      expect(h2.id).toBe(h1.id);
+    });
+
+    it('updateFoodCalories updates calories for food log item accurately', async () => {
+      useHealthStore.setState({ foodLogs: [] });
+      await useHealthStore.getState().addFoodLog({
+        name: 'Oatmeal',
+        qty: 1,
+        calories: 0,
+        serving: '1 bowl',
+        date: '2026-10-24',
+      });
+
+      const logged = useHealthStore.getState().foodLogs[0];
+      expect(logged.calories).toBe(0);
+
+      // User enters calories in Food Log Data
+      useHealthStore.getState().updateFoodCalories(logged.id, 220);
+      const updated = useHealthStore.getState().foodLogs[0];
+      expect(updated.calories).toBe(220);
     });
   });
 });

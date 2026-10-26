@@ -14,7 +14,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
+import { BorderRadius, Shadow } from '../theme/spacing';
 import { getScreenBgColor } from '../theme/screenBgColors';
 import Header from '../components/Header';
 import Toggle from '../components/Toggle';
@@ -22,6 +22,7 @@ import Card from '../components/Card';
 import InputField from '../components/InputField';
 import Button from '../components/Button';
 import PinLockModal from '../components/PinLockModal';
+import { safeGoBack } from '../utils/navigation';
 import api from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -205,7 +206,7 @@ const SecurityScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
-      <Header title="Security & Privacy" onBack={() => navigation.goBack()} />
+      <Header title="Security & Privacy" onBack={() => safeGoBack(navigation, 'MainTabs', { screen: 'Profile' })} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Security Status Header */}
         <View style={styles.iconSection}>

@@ -89,7 +89,7 @@ export const useSpecialEventStore = create<SpecialEventState>((set, get) => ({
     const index = current.findIndex((e) => e.id === id);
     if (index === -1) return;
 
-    let target = { ...current[index], ...updates };
+    const target = { ...current[index], ...updates };
 
     // Reschedule 2x automated notifications
     if (target.enabled) {

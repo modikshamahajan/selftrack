@@ -1,0 +1,47 @@
+SelfTrack is a modern, privacy-first, open-source personal growth companion designed to help you build lasting habits, track daily health metrics, reflect deeply through journaling, and optimize focus.
+
+Unlike commercial tracker apps, SelfTrack operates offline-first, contains zero advertisements, zero third-party telemetry or trackers, and gives you 100% control over your personal data.
+
+🌟 KEY FEATURES
+
+1. Habit Tracking & Consistency
+• Daily habit checklists with fractional consistency ring visualizers.
+• Custom streak targets (3, 7, 14, 21, 30, 60, 90 days) with milestone rewards.
+• Morning and Evening routine bundles with focused step-by-step runner guides.
+• Customizable categories, colors, icons, and flexible scheduling.
+
+2. Health, Hydration & Nutrition
+• Real-time pedometer step tracking with customizable daily targets.
+• Hydration visualizer with quick-tap water intake logging.
+• Nutritional food logger with category breakdowns (Meals, Healthy, Drinks, Fast Food).
+• Calorie tracking against customizable daily energy limits.
+
+3. Menstrual Cycle & Symptom Tracking
+• Cycle phase calculation (Follicular, Ovulation, Luteal, Menstrual).
+• Daily symptom and mood recording with private local storage.
+• Next period and fertile window forecasting.
+
+4. Reflection & Journaling
+• Daily guided prompts with 5-point emoji mood tracking.
+• Photo attachments for capturing memorable moments.
+• Local timeline history with quick date navigation.
+
+5. Focus Timer & Ambient Soundscapes
+• Built-in Pomodoro timer and deep breathing visualizer.
+• 4 high-quality offline ambient soundscapes (Forest, Rain, Ocean Waves, Lo-Fi beats).
+• Session statistics and completed focus minutes logging.
+
+6. Gamification & Community
+• Experience Points (XP) level progression and achievement badges.
+• Daily mystery chests with streak milestone celebrations.
+• Optional decentralized community feed to share milestones with friends.
+
+7. Smart Notifications & Special Events
+• Schedule birthdays, anniversaries, meetings, and occasions with countdown badges.
+• Local on-device reminders without relying on proprietary cloud messaging.
+
+🔒 PRIVACY GUARANTEE
+• Offline-First: All core features function without an active internet connection.
+• Zero Analytics: No Google Analytics, no Facebook SDK, no user tracking.
+• Data Portability: Export your entire dataset as JSON at any time.
+• Complete Erasure: Permanently delete your account and all data with one tap.

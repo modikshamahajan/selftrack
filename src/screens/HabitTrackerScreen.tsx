@@ -1,20 +1,16 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Animated, Dimensions, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Animated, Dimensions, Platform, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-// import PopupModal from '../components/PopupModal';
-import { DecorLeaf } from './SplashScreen';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
+import { BorderRadius, Shadow } from '../theme/spacing';
 import { getScreenBgColor } from '../theme/screenBgColors';
-import Card from '../components/Card';
-import ProgressRing from '../components/ProgressRing';
-import Header from '../components/Header';
 import FloatingActionButton from '../components/FloatingActionButton';
 import { RoutineRunnerModal, RoutineStep } from '../components/RoutineRunnerModal';
+import { safeGoBack } from '../utils/navigation';
 
 interface Habit {
   id: string;
@@ -28,18 +24,6 @@ interface Habit {
   progress: number;
   completedDays?: Record<string, boolean>;
 }
-
-const ADD_HABIT_ICONS = ['sun', 'book', 'droplet', 'activity', 'x-circle', 'moon', 'heart', 'coffee', 'star', 'zap'] as const;
-const HABIT_COLORS = ['#2ECC71', '#6C5CE7', '#00B4D8', '#F39C12', '#E74C3C', '#9B59B6', '#FF6B6B', '#1ABC9C'];
-const HABIT_STREAK_TARGETS = ['3', '7', '14', '21', '30', '60', '90'] as const;
-const HABIT_CATEGORIES = [
-  { label: 'Food', icon: 'coffee' },
-  { label: 'Health', icon: 'heart' },
-  { label: 'Entertainment', icon: 'music' },
-  { label: 'Daily Routine', icon: 'calendar' },
-  { label: 'Others', icon: 'layers' },
-] as const;
-type HabitCategoryOption = typeof HABIT_CATEGORIES[number];
 
 import { useHabitStore, getLocalTodayDateString } from '../store/useHabitStore';
 
@@ -203,6 +187,8 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
     const selectedDate = weekDates[selectedDayIndex];
     if (!selectedDate) return;
     const dateKey = getDateKey(selectedDate);
+    setAnimatingHabitId(id);
+    setTimeout(() => setAnimatingHabitId(null), 400);
     storeToggleHabit(id, dateKey);
   };
 
@@ -363,7 +349,7 @@ const HabitTrackerScreen: React.FC<{ navigation: any; route: any }> = ({ navigat
             {!isTab && canGoBack && (
               <TouchableOpacity 
                 style={styles.heroBackBtn}
-                onPress={() => navigation.goBack()}
+                onPress={() => safeGoBack(navigation, 'MainTabs', { screen: 'Home' })}
                 activeOpacity={0.8}
               >
                 <Icon name="arrow-left" size={18} color="#B45309" />

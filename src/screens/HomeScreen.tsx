@@ -1,19 +1,20 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, Image, StatusBar } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { Feather as Icon, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather as Icon, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
 import { BorderRadius, Shadow } from '../theme/spacing';
 import Card from '../components/Card';
-import XPBar from '../components/XPBar';
 import ProgressRing from '../components/ProgressRing';
-import AIAssistantWidget from '../components/AIAssistantWidget';
 import CelebrationModal from '../components/CelebrationModal';
 import { MysteryChestModal } from '../components/MysteryChestModal';
+import { WelcomeBonusAlert } from '../components/WelcomeBonusAlert';
 import { useAuthStore } from '../store/useAuthStore';
 import { useHabitStore } from '../store/useHabitStore';
 import { useHealthStore } from '../store/useHealthStore';
@@ -28,11 +29,10 @@ import api from '../services/api';
 
 const { width } = Dimensions.get('window');
 
-const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+const HomeScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, route }) => {
   const user = useAuthStore((state) => state.user);
   const habits = useHabitStore((state) => state.habits);
   const fetchHabits = useHabitStore((state) => state.fetchHabits);
-  const toggleHabit = useHabitStore((state) => state.toggleHabit);
   const metrics = useHealthStore((state) => state.metrics);
   const fetchMetricsByDate = useHealthStore((state) => state.fetchMetricsByDate);
   const foodLogs = useHealthStore((state) => state.foodLogs);
@@ -47,6 +47,47 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const loadSpecialEvents = useSpecialEventStore((state) => state.loadEvents);
   const [selectedCelebrationEvent, setSelectedCelebrationEvent] = useState<SpecialEvent | null>(null);
   const [hasAutoOpenedCelebration, setHasAutoOpenedCelebration] = useState(false);
+
+  // Welcome Bonus 100 XP Alert State (Cashback/Coupon Style)
+  const [welcomeBonusAlertVisible, setWelcomeBonusAlertVisible] = useState(false);
+  const bonusTimerRef = useRef<any>(null);
+
+  // Check on screen load/focus: show once on first login or registration
+  useFocusEffect(
+    useCallback(() => {
+      const evaluateWelcomeBonus = async () => {
+        const currentUser = useAuthStore.getState().user;
+        const isPending = useAuthStore.getState().hasPendingWelcomeBonus;
+        const routeBonus = route?.params?.showWelcomeBonus;
+
+        const userKey = currentUser?.id || currentUser?.phone;
+        const bonusKey = userKey ? `@selftrack_welcome_bonus_seen_${userKey}` : null;
+        const alreadySeen = bonusKey ? await AsyncStorage.getItem(bonusKey) : null;
+
+        // If explicitly pending from register/login OR this user has never seen it
+        if (isPending || routeBonus || (userKey && !alreadySeen)) {
+          useAuthStore.getState().setHasPendingWelcomeBonus(false);
+          if (route?.params?.showWelcomeBonus) {
+            navigation.setParams({ showWelcomeBonus: undefined });
+          }
+
+          if (bonusTimerRef.current) clearTimeout(bonusTimerRef.current);
+          bonusTimerRef.current = setTimeout(() => {
+            setWelcomeBonusAlertVisible(true);
+          }, 350);
+        }
+      };
+
+      evaluateWelcomeBonus();
+
+      return () => {
+        if (bonusTimerRef.current) {
+          clearTimeout(bonusTimerRef.current);
+          bonusTimerRef.current = null;
+        }
+      };
+    }, [navigation, route?.params?.showWelcomeBonus])
+  );
 
   const [aiTip, setAiTip] = useState(
     "Stay mindful and hydrated today! Consistency is your superpower."
@@ -80,7 +121,6 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       fetchJournalEntries();
       fetchRewards();
       loadSpecialEvents();
-      useHealthStore.getState().syncDevicePedometer();
       api.get('/ai/widget-tip')
         .then((res) => {
           if (res.data?.message) setAiTip(res.data.message);
@@ -130,7 +170,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     const logs = foodLogs.filter(
       (f) => f.date === localToday || f.date === utcToday || f.date?.startsWith(localToday) || f.date?.startsWith(utcToday)
     );
-    const calories = logs.reduce((sum, f) => sum + (f.calories * (f.qty || 1)), 0);
+    const calories = logs.reduce((sum, f) => sum + ((f.calories || 0) * (typeof f.qty === 'number' ? f.qty : 1)), 0);
     const ratio = Math.min(1, logs.length / 3);
     return { todayFoodLogs: logs, todayCalories: calories, foodRatio: ratio };
   }, [foodLogs, localToday, utcToday]);
@@ -151,7 +191,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const stepCurrent = isMetricsToday ? (metrics?.steps || 0) : 0;
   const stepRatio = Math.min(1, stepCurrent / stepTarget);
 
-  const { healthScore, healthPercent, vitalityScore } = useMemo(() => {
+  const { healthPercent, vitalityScore } = useMemo(() => {
     if (waterCurrent === 0 && habitsDone === 0 && stepCurrent === 0 && foodLogs.length === 0 && !hasJournalToday) {
       return { healthScore: 0, healthPercent: 0, vitalityScore: 0 };
     }
@@ -268,7 +308,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <StatusBar style="dark" />
       {/* Dynamic Colorful Background Waves */}
       <LinearGradient
         colors={['#E8F3FF', '#EDE9FE', '#F8FAFC']}
@@ -485,7 +525,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   </View>
                   <View style={styles.vitalityPill}>
                     <Text style={styles.vitalityPillIcon}>👟</Text>
-                    <Text style={styles.vitalityPillText}>{(metrics?.steps || 0).toLocaleString()} steps</Text>
+                    <Text style={styles.vitalityPillText}>{stepCurrent.toLocaleString()} steps</Text>
                   </View>
                   <View style={styles.vitalityPill}>
                     <Text style={styles.vitalityPillIcon}>🧘</Text>
@@ -783,7 +823,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               <LinearGradient colors={['#DCFCE7', '#BBF7D0']} style={styles.vitalIconWrap}>
                 <Ionicons name="walk" size={20} color="#16A34A" />
               </LinearGradient>
-              <Text style={styles.vitalValue}>{(metrics?.steps || 0).toLocaleString()}</Text>
+              <Text style={styles.vitalValue}>{stepCurrent.toLocaleString()}</Text>
               <Text style={styles.vitalLabel}>Daily Steps</Text>
             </TouchableOpacity>
 
@@ -810,7 +850,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 <Ionicons name="flame" size={20} color="#E11D48" />
               </LinearGradient>
               <Text style={styles.vitalValue}>
-                {metrics?.calories_burned ? `${metrics.calories_burned} kcal` : `${Math.round((metrics?.steps || 0) * 0.04)} kcal`}
+                {metrics?.calories_burned ? `${metrics.calories_burned} kcal` : `${Math.round(stepCurrent * 0.04)} kcal`}
               </Text>
               <Text style={styles.vitalLabel}>Calories Burned</Text>
             </TouchableOpacity>
@@ -910,13 +950,19 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 <View style={styles.cycleHomeHeaderRow}>
                   <Text style={styles.cycleHomeBadge}>WOMEN'S HEALTH 🌸</Text>
                   <Text style={styles.cycleHomePhaseBadge}>
-                    {homeCycleInfo.badgeEmoji} Day {homeCycleInfo.cycleDay}
+                    {homeCycleInfo.isInitialized
+                      ? `${homeCycleInfo.badgeEmoji} Day ${homeCycleInfo.cycleDay}`
+                      : '🌸 Day 0'}
                   </Text>
                 </View>
 
-                <Text style={styles.cycleHomeTitle}>{homeCycleInfo.phaseTitle}</Text>
+                <Text style={styles.cycleHomeTitle}>
+                  {homeCycleInfo.isInitialized ? homeCycleInfo.phaseTitle : "Women's Health"}
+                </Text>
                 <Text style={styles.cycleHomeSub} numberOfLines={1}>
-                  Next period in {homeCycleInfo.daysUntilNextPeriod} days (~{homeCycleInfo.nextPeriodDate})
+                  {homeCycleInfo.isInitialized && homeCycleInfo.daysUntilNextPeriod > 0
+                    ? `Next period in ${homeCycleInfo.daysUntilNextPeriod} days (~${homeCycleInfo.nextPeriodDate})`
+                    : 'Tap to log cycle & start tracking'}
                 </Text>
               </View>
 
@@ -1019,6 +1065,20 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         visible={chestModalVisible}
         onClose={() => setChestModalVisible(false)}
         reward={claimedReward}
+      />
+
+      {/* Small Welcome Bonus Cashback / Coupon Alert with Crackers */}
+      <WelcomeBonusAlert
+        visible={welcomeBonusAlertVisible}
+        xpAmount={100}
+        onClose={async () => {
+          setWelcomeBonusAlertVisible(false);
+          const currentUser = useAuthStore.getState().user;
+          const userKey = currentUser?.id || currentUser?.phone;
+          if (userKey) {
+            await AsyncStorage.setItem(`@selftrack_welcome_bonus_seen_${userKey}`, 'true').catch(() => {});
+          }
+        }}
       />
     </SafeAreaView>
   );

@@ -20,13 +20,12 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { Feather as Icon } from '@expo/vector-icons';
 
-import { Colors } from '../theme/colors';
-import { Typography } from '../theme/typography';
-import { BorderRadius, Shadow } from '../theme/spacing';
+import { Shadow } from '../theme/spacing';
 import { getScreenBgColor } from '../theme/screenBgColors';
 import { useAuthStore } from '../store/useAuthStore';
 import { useHabitStore } from '../store/useHabitStore';
 import { useRewardsStore } from '../store/useRewardsStore';
+import { safeGoBack } from '../utils/navigation';
 
 interface MenuItem {
   icon: string;
@@ -82,6 +81,12 @@ const MENU_ITEMS: MenuItem[] = [
     label: 'Settings & AI Config',
     screen: 'Settings',
     color: '#6B7280',
+  },
+  {
+    icon: 'shield',
+    label: 'Admin Portal & Database',
+    screen: 'AdminLogin',
+    color: '#059669',
   },
   {
     icon: 'log-out',
@@ -248,7 +253,7 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({
       <View style={styles.topBar}>
         <TouchableOpacity
           activeOpacity={0.7}
-          onPress={() => navigation.goBack()}
+          onPress={() => safeGoBack(navigation, 'MainTabs', { screen: 'Home' })}
         >
           <Icon
             name="arrow-left"

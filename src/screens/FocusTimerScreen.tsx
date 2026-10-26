@@ -1,35 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   ScrollView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather as Icon, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withRepeat,
-  withSequence,
   Easing,
   FadeInDown,
 } from 'react-native-reanimated';
-import { Colors } from '../theme/colors';
-import { Typography } from '../theme/typography';
 import { Shadow } from '../theme/spacing';
 import ProgressRing from '../components/ProgressRing';
 import { useFocusEffect } from '@react-navigation/native';
 import { ambientSoundEngine, SoundscapeType } from '../utils/ambientSoundscapes';
+import { safeGoBack } from '../utils/navigation';
 import { useFocusStore } from '../store/useFocusStore';
 import { playCelebrationSound } from '../utils/celebrationSound';
-
-const { width } = Dimensions.get('window');
 
 type TimerMode = 'pomodoro' | 'breathing';
 
@@ -270,7 +263,7 @@ export const FocusTimerScreen: React.FC<{ navigation: any }> = ({ navigation }) 
         <TouchableOpacity
           onPress={() => {
             ambientSoundEngine.stopSoundscape();
-            navigation.goBack();
+            safeGoBack(navigation, 'MainTabs', { screen: 'Habits' });
           }}
           style={styles.backBtn}
         >

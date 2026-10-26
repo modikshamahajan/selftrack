@@ -8,8 +8,9 @@ import {
     StyleSheet,
     Dimensions,
     Image,
-    StatusBar,
+    ActivityIndicator,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import {
@@ -21,6 +22,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Alert } from 'react-native';
 import { useHabitStore } from '../store/useHabitStore';
+import { safeGoBack } from '../utils/navigation';
 
 const HEADER_LEAF = require('../../assets/Images/headerleaf.png');
 
@@ -98,9 +100,6 @@ const CreateEditHabitScreen = () => {
         existingHabit?.reminder_frequency ?? 'daily'
     );
     const [reminderTime, setReminderTime] = useState(existingHabit?.reminder_time ?? '08:30 AM');
-    const [reminderIntervalHours, setReminderIntervalHours] = useState(
-        existingHabit?.reminder_interval_hours ?? 3
-    );
     const [reminderIntervalUnit, setReminderIntervalUnit] = useState<'hours' | 'minutes'>(
         existingHabit?.reminder_interval_unit ?? 'hours'
     );
@@ -116,17 +115,34 @@ const CreateEditHabitScreen = () => {
         existingHabit?.routine_type ?? 'none'
     );
 
-    const isDoneDisabled = !title.trim();
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const onSave = route.params?.onSave;
 
     const handleCancel = () => {
-      navigation.goBack();
+      safeGoBack(navigation, 'MainTabs', { screen: 'Habits' });
     };
     const handleDone = async () => {
-        if (!title.trim()) {
+        if (isSubmitting) return;
+
+        const trimmedTitle = title.trim();
+        if (!trimmedTitle) {
             return Alert.alert('Habit name required', 'Please enter a habit title before saving.');
         }
+
+        // Prevent duplicate habit additions (even from quick taps or re-entry)
+        const allExistingHabits = useHabitStore.getState().habits || [];
+        const isDuplicate = allExistingHabits.some(
+            (h) => h.name.trim().toLowerCase() === trimmedTitle.toLowerCase() && h.id !== existingHabit?.id
+        );
+        if (isDuplicate) {
+            return Alert.alert(
+                'Habit Already Exists',
+                `A habit named "${trimmedTitle}" already exists. Please choose a different title.`
+            );
+        }
+
+        setIsSubmitting(true);
 
         const calculatedIntervalHours = reminderIntervalUnit === 'hours'
             ? reminderIntervalValue
@@ -134,7 +150,7 @@ const CreateEditHabitScreen = () => {
 
         const habitPayload = {
             id: existingHabit?.id ?? Date.now().toString(),
-            name: title.trim(),
+            name: trimmedTitle,
             icon,
             color,
             category,
@@ -156,7 +172,7 @@ const CreateEditHabitScreen = () => {
         try {
             if (existingHabit?.id) {
               await useHabitStore.getState().updateHabit(existingHabit.id, {
-                name: title.trim(),
+                name: trimmedTitle,
                 icon,
                 color,
                 category,
@@ -172,7 +188,7 @@ const CreateEditHabitScreen = () => {
               });
             } else {
               await useHabitStore.getState().addHabit({
-                name: title.trim(),
+                name: trimmedTitle,
                 icon,
                 color,
                 category,
@@ -191,15 +207,17 @@ const CreateEditHabitScreen = () => {
             if (typeof onSave === 'function') {
               onSave(habitPayload);
             }
-            navigation.goBack();
+            safeGoBack(navigation, 'MainTabs', { screen: 'Habits' });
         } catch (err: any) {
             Alert.alert('Error', err.response?.data?.detail || err.message || 'Failed to save habit');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#F7FAF8' }} edges={['top', 'bottom']}>
-            <StatusBar barStyle="dark-content" backgroundColor="#F7FAF8" />
+            <StatusBar style="dark" />
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
@@ -261,7 +279,7 @@ const CreateEditHabitScreen = () => {
                                     {title.trim() ? title : 'Your Habit Name'}
                                 </Text>
                                 <Text style={styles.previewCategoryText}>
-                                    {category} • +{streak * 10} XP • {reminderEnabled ? (reminderFreq === 'smart' ? 'Adaptive Nudge' : reminderFreq === 'interval' ? `Every ${reminderIntervalHours}h` : `Daily ${reminderTime}`) : 'No Alerts'}
+                                    {category} • +{streak * 10} XP • {reminderEnabled ? (reminderFreq === 'smart' ? 'Adaptive Nudge' : reminderFreq === 'interval' ? `Every ${reminderIntervalValue}${reminderIntervalUnit === 'hours' ? 'h' : 'm'}` : `Daily ${reminderTime}`) : 'No Alerts'}
                                 </Text>
                             </View>
                         </View>
@@ -277,7 +295,12 @@ const CreateEditHabitScreen = () => {
                         </View>
                         <View style={styles.templatesGrid}>
                             {QUICK_TEMPLATES.map((tpl) => {
-                                const isSelected = title === tpl.name;
+                                const isSelected = title.trim().toLowerCase() === tpl.name.toLowerCase();
+                                const allHabits = useHabitStore.getState().habits || [];
+                                const isAlreadyInHabits = allHabits.some(
+                                    (h) => h.name.trim().toLowerCase() === tpl.name.toLowerCase()
+                                );
+
                                 return (
                                     <TouchableOpacity
                                         key={tpl.name}
@@ -285,8 +308,16 @@ const CreateEditHabitScreen = () => {
                                         style={[
                                             styles.templateGridCard,
                                             isSelected && styles.templateGridCardActive,
+                                            isAlreadyInHabits && { opacity: 0.55 },
                                         ]}
                                         onPress={() => {
+                                            if (isAlreadyInHabits) {
+                                                Alert.alert(
+                                                    'Habit Already Added',
+                                                    `"${tpl.name}" is already in your habits list! You cannot add duplicate habits.`
+                                                );
+                                                return;
+                                            }
                                             setTitle(tpl.name);
                                             setIcon(tpl.icon);
                                             setColor(tpl.color);
@@ -302,7 +333,7 @@ const CreateEditHabitScreen = () => {
                                                 {tpl.name}
                                             </Text>
                                             <Text style={styles.templateCardMeta}>
-                                                {tpl.category} • {tpl.streak}d
+                                                {isAlreadyInHabits ? '✓ Added' : `${tpl.category} • ${tpl.streak}d`}
                                             </Text>
                                         </View>
                                         {isSelected && (
@@ -716,6 +747,36 @@ const CreateEditHabitScreen = () => {
                             </View>
                         )}
                     </View>
+
+                    {/* Routine Bundle Section */}
+                    <View style={styles.section}>
+                        <View style={styles.labelRow}>
+                            <View style={styles.smallIconWrapper}>
+                                <Feather name="sun" size={16} color="#F59E0B" />
+                            </View>
+                            <Text style={styles.label}>Routine Bundle</Text>
+                        </View>
+                        <View style={styles.freqPillRow}>
+                            {[
+                                { key: 'none', label: 'Anytime' },
+                                { key: 'morning', label: 'Morning Routine' },
+                                { key: 'evening', label: 'Evening Routine' },
+                            ].map((item) => {
+                                const isSelected = routineType === item.key;
+                                return (
+                                    <TouchableOpacity
+                                        key={item.key}
+                                        style={[styles.freqPill, isSelected && styles.freqPillActive]}
+                                        onPress={() => setRoutineType(item.key as any)}
+                                    >
+                                        <Text style={[styles.freqPillText, isSelected && styles.freqPillTextActive]}>
+                                            {item.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    </View>
                 </View>
 
                 {/* BUTTONS */}
@@ -726,23 +787,32 @@ const CreateEditHabitScreen = () => {
 
                     <TouchableOpacity
                         onPress={handleDone}
-                        disabled={!title.trim()}
+                        disabled={!title.trim() || isSubmitting}
                         style={[
                             styles.doneBtn,
                             {
-                                backgroundColor: title.trim() ? color : '#CBD5E1',
-                                opacity: title.trim() ? 1 : 0.7,
+                                backgroundColor: (!title.trim() || isSubmitting) ? '#CBD5E1' : color,
+                                opacity: (!title.trim() || isSubmitting) ? 0.7 : 1,
                             },
                         ]}
                     >
-                        <Text style={styles.doneText}>{existingHabit ? 'Save' : 'Done'}</Text>
+                        {isSubmitting ? (
+                            <>
+                                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+                                <Text style={styles.doneText}>Saving...</Text>
+                            </>
+                        ) : (
+                            <>
+                                <Text style={styles.doneText}>{existingHabit ? 'Save' : 'Done'}</Text>
 
-                        <Ionicons
-                            name={existingHabit ? "save-outline" : "checkmark-circle"}
-                            size={22}
-                            color="#fff"
-                            style={{ marginLeft: 8 }}
-                        />
+                                <Ionicons
+                                    name={existingHabit ? "save-outline" : "checkmark-circle"}
+                                    size={22}
+                                    color="#fff"
+                                    style={{ marginLeft: 8 }}
+                                />
+                            </>
+                        )}
                     </TouchableOpacity>
                 </View>
             </ScrollView>

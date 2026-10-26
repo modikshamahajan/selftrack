@@ -14,7 +14,7 @@ import { Feather as Icon } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
+import { BorderRadius, Shadow } from '../theme/spacing';
 import {
   SpecialEvent,
   SpecialEventType,
@@ -31,6 +31,7 @@ interface CreateEditEventModalProps {
   onClose: () => void;
   onSave: (eventData: Omit<SpecialEvent, 'id' | 'createdAt'>) => void;
   initialEvent?: SpecialEvent | null;
+  initialEventType?: SpecialEventType;
 }
 
 const QUICK_TIMES = ['09:00 AM', '12:00 PM', '02:30 PM', '06:00 PM', '08:00 PM'];
@@ -40,13 +41,13 @@ const CreateEditEventModal: React.FC<CreateEditEventModalProps> = ({
   onClose,
   onSave,
   initialEvent,
+  initialEventType,
 }) => {
   const insets = useSafeAreaInsets();
-  const [eventType, setEventType] = useState<SpecialEventType>('birthday');
+  const [eventType, setEventType] = useState<SpecialEventType>(initialEventType || 'birthday');
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('09:00');
-  const [timePeriod, setTimePeriod] = useState<'AM' | 'PM'>('AM');
   const [timeDisplay, setTimeDisplay] = useState('09:00 AM');
   const [repeat, setRepeat] = useState<EventRecurrence>('yearly');
   const [reminderAdvance, setReminderAdvance] = useState<EventReminderAdvance>('1_day_before');
@@ -93,7 +94,6 @@ const CreateEditEventModal: React.FC<CreateEditEventModalProps> = ({
         if (h === 0) h = 12;
         const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
         setTime(initialEvent.time);
-        setTimePeriod(period);
         setTimeDisplay(formatted);
       }
     } else {
@@ -106,16 +106,15 @@ const CreateEditEventModal: React.FC<CreateEditEventModalProps> = ({
       setTitle('');
       setNotes('');
       setLocationOrLink('');
-      setEventType('birthday');
+      setEventType(initialEventType || 'birthday');
       setRepeat('yearly');
       setReminderAdvance('1_day_before');
       setTime('09:00');
-      setTimePeriod('AM');
       setTimeDisplay('09:00 AM');
       setAutoPhoneAlerts(true);
     }
     setErrorMsg('');
-  }, [visible, initialEvent]);
+  }, [visible, initialEvent, initialEventType]);
 
   // Sync formatted date string
   useEffect(() => {
@@ -154,7 +153,6 @@ const CreateEditEventModal: React.FC<CreateEditEventModalProps> = ({
     if (p === 'AM' && h === 12) h = 0;
     const military = `${String(h).padStart(2, '0')}:${m}`;
     setTime(military);
-    setTimePeriod(p as 'AM' | 'PM');
   };
 
   const handleAdjustDate = (unit: 'year' | 'month' | 'day', amount: number) => {

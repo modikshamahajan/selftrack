@@ -6,23 +6,16 @@ import {
   Modal,
   TouchableOpacity,
   Dimensions,
-  Platform,
 } from 'react-native';
-import { Feather as Icon, Ionicons } from '@expo/vector-icons';
+import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
   FadeIn,
   FadeInDown,
 } from 'react-native-reanimated';
-import { Colors } from '../theme/colors';
 import { Shadow } from '../theme/spacing';
 import { ambientSoundEngine } from '../utils/ambientSoundscapes';
 import { playCelebrationSound } from '../utils/celebrationSound';
-import { useAuthStore } from '../store/useAuthStore';
 import { useHabitStore } from '../store/useHabitStore';
 
 const { width } = Dimensions.get('window');
@@ -57,30 +50,15 @@ export const RoutineRunnerModal: React.FC<RoutineRunnerModalProps> = ({
 }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
-  const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [wasAlreadyClaimed, setWasAlreadyClaimed] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setCurrentStepIndex(0);
       setIsFinished(false);
-      setSecondsElapsed(0);
       setWasAlreadyClaimed(false);
     }
   }, [visible]);
-
-  // Elapsed timer for active step
-  useEffect(() => {
-    let timer: any = null;
-    if (visible && !isFinished) {
-      timer = setInterval(() => {
-        setSecondsElapsed((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [visible, isFinished, currentStepIndex]);
 
   const activeStep = steps[currentStepIndex];
   const totalSteps = steps.length;
@@ -94,7 +72,6 @@ export const RoutineRunnerModal: React.FC<RoutineRunnerModalProps> = ({
 
     if (currentStepIndex + 1 < totalSteps) {
       setCurrentStepIndex((prev) => prev + 1);
-      setSecondsElapsed(0);
     } else {
       // Completed entire routine!
       setIsFinished(true);
@@ -117,10 +94,6 @@ export const RoutineRunnerModal: React.FC<RoutineRunnerModalProps> = ({
     if (routineType === 'evening') return ['#6366F1', '#4338CA'];
     return ['#10B981', '#059669'];
   };
-
-  const mins = Math.floor(secondsElapsed / 60);
-  const secs = secondsElapsed % 60;
-  const formattedTimer = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
   if (!visible) return null;
 
@@ -163,11 +136,6 @@ export const RoutineRunnerModal: React.FC<RoutineRunnerModalProps> = ({
 
               <Text style={styles.stepTitle}>{activeStep.title}</Text>
               <Text style={styles.stepSubtitle}>{activeStep.subtitle}</Text>
-
-              <View style={styles.timerPill}>
-                <Icon name="clock" size={14} color="#64748B" />
-                <Text style={styles.timerText}>{formattedTimer}</Text>
-              </View>
 
               <TouchableOpacity
                 activeOpacity={0.85}
@@ -313,24 +281,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     lineHeight: 18,
     paddingHorizontal: 16,
-  },
-  timerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-    marginVertical: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  timerText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-    fontVariant: ['tabular-nums'],
+    marginBottom: 20,
   },
   doneBtn: {
     width: '100%',

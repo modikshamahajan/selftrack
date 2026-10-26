@@ -6,7 +6,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
-import { Shadow } from '../theme/spacing';
 
 import SplashScreen from '../screens/SplashScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -32,7 +31,7 @@ export type RootStackParamList = {
   Splash: undefined;
   Onboarding: undefined;
   Login: undefined;
-  MainTabs: undefined;
+  MainTabs: undefined | { screen?: string; showWelcomeBonus?: boolean };
   AIChat: undefined;
   HabitTracker: undefined;
   FocusTimer: undefined;

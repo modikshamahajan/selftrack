@@ -212,6 +212,12 @@ class FoodLogCreate(BaseModel):
 
 
 
+class FoodLogUpdate(BaseModel):
+    calories: Optional[int] = None
+    qty: Optional[int] = None
+    serving: Optional[str] = None
+
+
 class FoodLogResponse(BaseModel):
     id: str
     date: str

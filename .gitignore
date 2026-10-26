@@ -1,22 +1,52 @@
+# Dependencies
 node_modules/
+
+# Expo and Build Outputs
 .expo/
 dist/
 web-build/
-*.db
-selftrack.db
-.pytest_cache/
-.DS_Store
 
 # Android build outputs and caches
 android/.gradle/
 android/app/build/
 android/build/
+*.apk
+*.aab
+*.keystore
+*.jks
 
 # iOS build outputs
 ios/Pods/
 ios/build/
 
+# Python, virtual environments, and caches
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+backend/.pytest_cache/
+backend/__pycache__/
+backend/.venv/
+.venv/
+env/
+venv/
 
-*.apk
+# SQLite databases, journals, and backups
+*.db
+*.db-*
+*.db.bak
+*.sqlite3
+selftrack.db*
+backend/*.db*
+backend/selftrack*.db*
+
+# Local environment and secret files
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Temporary development files
+.continue/
+.DS_Store
+expo_*_qr.png

@@ -1,5 +1,3 @@
-import { ViewStyle } from 'react-native';
-
 export const Spacing: Record<string, number> = {
   xs: 4,
   sm: 8,

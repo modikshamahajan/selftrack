@@ -4,14 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChart, BarChart } from 'react-native-chart-kit';
-import { Colors } from '../theme/colors';
-import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
+import { Shadow } from '../theme/spacing';
 import Card from '../components/Card';
 import { useHabitStore } from '../store/useHabitStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useJournalStore } from '../store/useJournalStore';
 import { useHealthStore } from '../store/useHealthStore';
+import { safeGoBack } from '../utils/navigation';
 
 const { width } = Dimensions.get('window');
 
@@ -63,13 +62,13 @@ const AnalyticsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const dynamicData = useMemo(() => {
     const today = new Date();
     const todayStr = formatLocalDate(today);
-    let labels: string[] = [];
+    const labels: string[] = [];
     let habitCounts: number[] = [];
     let moodAverages: number[] = [];
     let stepCounts: number[] = [];
     let sleepHours: number[] = [];
     let waterCounts: number[] = [];
-    let calCounts: number[] = [];
+    const calCounts: number[] = [];
 
     const getMetricsForDate = (dateStr: string) => {
       if (dailyMetrics[dateStr]) return dailyMetrics[dateStr];
@@ -321,7 +320,7 @@ const AnalyticsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           <View style={styles.heroTopRow}>
             <TouchableOpacity 
               style={styles.heroActionBtn} 
-              onPress={() => navigation.goBack()}
+              onPress={() => safeGoBack(navigation, 'MainTabs', { screen: 'Home' })}
               activeOpacity={0.8}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >

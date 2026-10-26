@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
-  Alert,
   Platform,
   Dimensions,
 } from 'react-native';
@@ -22,11 +21,9 @@ import {
   parseYMD,
   getDaysDiff,
   calculateCycleInfo,
-  DailySymptomLog,
 } from '../store/useMenstrualStore';
-import { Colors } from '../theme/colors';
-import { Typography } from '../theme/typography';
 import { BorderRadius, Shadow } from '../theme/spacing';
+import { safeGoBack } from '../utils/navigation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -105,6 +102,7 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
     updateSettings,
     logPeriodToggle,
     saveDailyLog,
+    clearMenstrualData,
   } = useMenstrualStore();
 
   const todayStr = useMemo(() => formatYMD(new Date()), []);
@@ -257,16 +255,34 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
   };
 
   const handleSaveSettings = async () => {
+    const trimmed = tempLastPeriod.trim();
     await updateSettings({
       cycleLength: tempCycleLength,
       periodDuration: tempPeriodDuration,
-      lastPeriodStart: tempLastPeriod,
+      lastPeriodStart: trimmed,
+      hasUserEnteredData: trimmed !== '',
     });
     setSettingsModalVisible(false);
-    showToast('Cycle configuration updated 🌸');
+    showToast(trimmed !== '' ? 'Cycle configuration updated 🌸' : 'Cycle reset to Day 0 ✨');
   };
 
-  const currentPhaseInsight = PHASE_DETAILS[todayCycle.phase];
+  const handleResetCycle = async () => {
+    await clearMenstrualData();
+    setTempLastPeriod('');
+    setSettingsModalVisible(false);
+    showToast('Cycle reset to Day 0 (Untracked) 🌸');
+  };
+
+  const currentPhaseInsight = todayCycle.isInitialized
+    ? PHASE_DETAILS[todayCycle.phase]
+    : {
+        title: 'Cycle Not Started',
+        hormone: 'Personalized hormone balance activates once your period is logged',
+        energy: 'Track daily energy, moods, and symptoms using the logger below',
+        nutrition: 'Focus on nutrient-dense meals, leafy greens, and proper hydration',
+        workout: 'Enjoy your favorite workouts, yoga, or daily walking',
+        tip: 'Tap "Period Started Today" or set your last period in settings (⚙️ top right) to unlock cycle phases.',
+      };
 
   const androidNavPadding = Platform.OS === 'android' ? Math.max(insets.bottom, 28) : insets.bottom;
   const scrollBottomPadding = androidNavPadding + (Platform.OS === 'android' ? 84 : 40);
@@ -277,7 +293,7 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
       <View style={styles.headerBar}>
         <TouchableOpacity
           style={styles.headerCircleBtn}
-          onPress={() => navigation.goBack()}
+          onPress={() => safeGoBack(navigation, 'MainTabs', { screen: 'Health' })}
           activeOpacity={0.7}
         >
           <Icon name="arrow-left" size={20} color="#881337" />
@@ -320,26 +336,44 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
           <View style={styles.decorCircle2} />
 
           <View style={styles.heroTopStatusRow}>
-            <View style={[styles.fertilityBadge, { backgroundColor: todayCycle.fertilityChance === 'High' ? '#F43F5E20' : '#A855F720' }]}>
-              <Text style={[styles.fertilityBadgeText, { color: todayCycle.fertilityChance === 'High' ? '#BE123C' : '#7E22CE' }]}>
-                {todayCycle.fertilityChance === 'High' ? '🔥 High Fertility Window' : todayCycle.fertilityChance === 'Medium' ? '✨ Moderate Conception' : '🌱 Low Conception Risk'}
-              </Text>
-            </View>
+            {todayCycle.isInitialized && todayCycle.cycleDay > 0 ? (
+              <>
+                <View style={[styles.fertilityBadge, { backgroundColor: todayCycle.fertilityChance === 'High' ? '#F43F5E20' : '#A855F720' }]}>
+                  <Text style={[styles.fertilityBadgeText, { color: todayCycle.fertilityChance === 'High' ? '#BE123C' : '#7E22CE' }]}>
+                    {todayCycle.fertilityChance === 'High' ? '🔥 High Fertility Window' : todayCycle.fertilityChance === 'Medium' ? '✨ Moderate Conception' : '🌱 Low Conception Risk'}
+                  </Text>
+                </View>
 
-            <View style={styles.phaseTagPill}>
-              <Text style={styles.phaseTagText}>{todayCycle.badgeEmoji} {todayCycle.phaseTitle}</Text>
-            </View>
+                <View style={styles.phaseTagPill}>
+                  <Text style={styles.phaseTagText}>{todayCycle.badgeEmoji} {todayCycle.phaseTitle}</Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={[styles.fertilityBadge, { backgroundColor: '#F1F5F9' }]}>
+                  <Text style={[styles.fertilityBadgeText, { color: '#64748B' }]}>
+                    🌸 Untracked Cycle
+                  </Text>
+                </View>
+
+                <View style={styles.phaseTagPill}>
+                  <Text style={styles.phaseTagText}>✨ Tap to Begin</Text>
+                </View>
+              </>
+            )}
           </View>
 
           {/* Central Interactive Dial Display */}
           <View style={styles.centralDialWrap}>
-            <View style={[styles.dialOuterRing, { borderColor: todayCycle.themeColor + '40' }]}>
+            <View style={[styles.dialOuterRing, { borderColor: todayCycle.isInitialized && todayCycle.cycleDay > 0 ? todayCycle.themeColor + '40' : '#E2E8F0' }]}>
               <View style={[styles.dialInnerDisc, { backgroundColor: '#FFFFFF' }]}>
-                <Text style={styles.dialEmojiTop}>{todayCycle.badgeEmoji}</Text>
-                <Text style={[styles.dialDayNumber, { color: todayCycle.themeColor }]}>
-                  Day {todayCycle.cycleDay}
+                <Text style={styles.dialEmojiTop}>{todayCycle.isInitialized && todayCycle.cycleDay > 0 ? todayCycle.badgeEmoji : '🌸'}</Text>
+                <Text style={[styles.dialDayNumber, { color: todayCycle.isInitialized && todayCycle.cycleDay > 0 ? todayCycle.themeColor : '#64748B' }]}>
+                  {todayCycle.isInitialized && todayCycle.cycleDay > 0 ? `Day ${todayCycle.cycleDay}` : 'Day 0'}
                 </Text>
-                <Text style={styles.dialSubLabel}>of {settings.cycleLength} days cycle</Text>
+                <Text style={styles.dialSubLabel}>
+                  {todayCycle.isInitialized && todayCycle.cycleDay > 0 ? `of ${settings.cycleLength} days cycle` : 'No cycle data yet'}
+                </Text>
               </View>
             </View>
           </View>
@@ -347,12 +381,21 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
           {/* Phase Summary & Next Period */}
           <View style={styles.heroPhaseSummaryBox}>
             <Text style={styles.heroPhaseMainText}>{todayCycle.phaseDescription}</Text>
-            <View style={styles.nextPeriodCountdownPill}>
-              <Ionicons name="calendar-outline" size={14} color="#9F1239" style={{ marginRight: 6 }} />
-              <Text style={styles.nextPeriodCountdownText}>
-                Next period expected in <Text style={{ fontWeight: '800' }}>{todayCycle.daysUntilNextPeriod} days</Text> (~{todayCycle.nextPeriodDate})
-              </Text>
-            </View>
+            {todayCycle.isInitialized && todayCycle.daysUntilNextPeriod > 0 ? (
+              <View style={styles.nextPeriodCountdownPill}>
+                <Ionicons name="calendar-outline" size={14} color="#9F1239" style={{ marginRight: 6 }} />
+                <Text style={styles.nextPeriodCountdownText}>
+                  Next period expected in <Text style={{ fontWeight: '800' }}>{todayCycle.daysUntilNextPeriod} days</Text> (~{todayCycle.nextPeriodDate})
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.nextPeriodCountdownPill, { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}>
+                <Ionicons name="information-circle-outline" size={14} color="#64748B" style={{ marginRight: 6 }} />
+                <Text style={[styles.nextPeriodCountdownText, { color: '#64748B' }]}>
+                  No period data entered yet • Log below to start
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Quick Period Log Action Button */}
@@ -418,8 +461,13 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               const isToday = todayStr === item.dateStr;
               const hasLog = Boolean(dailyLogs[item.dateStr]);
 
-              const isPeriodDay = dayCycle.isPeriodActive;
-              const isOvulationDay = dayCycle.phase === 'ovulation';
+              const isUntracked =
+                settings.hasUserEnteredData === false ||
+                !settings.lastPeriodStart ||
+                settings.lastPeriodStart.trim() === '';
+
+              const isPeriodDay = !isUntracked && dayCycle.isInitialized && dayCycle.isPeriodActive;
+              const isOvulationDay = !isUntracked && dayCycle.isInitialized && dayCycle.phase === 'ovulation';
 
               return (
                 <TouchableOpacity
@@ -453,8 +501,8 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                   <View style={styles.dayDotContainer}>
                     {isPeriodDay && <View style={styles.periodDot} />}
                     {isOvulationDay && !isPeriodDay && <View style={styles.ovulationDot} />}
-                    {hasLog && !isPeriodDay && !isOvulationDay && <View style={styles.logDot} />}
-                    {isToday && !isPeriodDay && !isOvulationDay && !hasLog && <View style={styles.todayDot} />}
+                    {!isUntracked && hasLog && !isPeriodDay && !isOvulationDay && <View style={styles.logDot} />}
+                    {isToday && !isSelected && !isPeriodDay && !isOvulationDay && <View style={styles.todayDot} />}
                   </View>
                 </TouchableOpacity>
               );
@@ -486,7 +534,9 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                 {selectedDate === todayStr ? "Today's Log 🌸" : `Log for ${parseYMD(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
               </Text>
               <Text style={styles.sectionSubtitle}>
-                Day {selectedDayCycle.cycleDay} • {selectedDayCycle.phaseTitle}
+                {selectedDayCycle.isInitialized
+                  ? `Day ${selectedDayCycle.cycleDay} • ${selectedDayCycle.phaseTitle}`
+                  : 'Day 0 • No Cycle Data'}
               </Text>
             </View>
 
@@ -784,6 +834,26 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               >
                 <Text style={styles.modalSaveBtnText}>Save Parameters & Recalculate</Text>
               </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Clear / Reset to Day 0 Button */}
+            <TouchableOpacity
+              style={{
+                marginTop: 12,
+                paddingVertical: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                backgroundColor: '#F8FAFC',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onPress={handleResetCycle}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>
+                Reset Cycle Data to Day 0 (Untracked)
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

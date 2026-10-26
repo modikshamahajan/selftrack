@@ -13,13 +13,14 @@ import {
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
+import { BorderRadius, Shadow } from '../theme/spacing';
 import { getScreenBgColor } from '../theme/screenBgColors';
 import Header from '../components/Header';
 import Toggle from '../components/Toggle';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { safeGoBack } from '../utils/navigation';
 import api from '../services/api';
 
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'];
@@ -94,7 +95,7 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
-      <Header title="Settings" onBack={() => navigation.goBack()} />
+      <Header title="Settings" onBack={() => safeGoBack(navigation, 'MainTabs', { screen: 'Profile' })} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* AI ENGINE CONFIGURATION */}
         <View style={styles.section}>

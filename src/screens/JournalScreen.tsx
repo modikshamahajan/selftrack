@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Keyboard,
   Image, TextInput, Alert, KeyboardAvoidingView, Platform, Dimensions,
-  ActivityIndicator, Modal, TouchableWithoutFeedback
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
@@ -22,13 +22,10 @@ try {
   // Gracefully fallback when native module is absent in Expo Go
 }
 
-import { Colors } from '../theme/colors';
-import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
-import { getScreenBgColor } from '../theme/screenBgColors';
+import { Shadow } from '../theme/spacing';
 import Card from '../components/Card';
 import PopupModal from '../components/PopupModal';
 import { useJournalStore, formatLocalDate } from '../store/useJournalStore';
-import { useSettingsStore } from '../store/useSettingsStore';
 
 // Layout Constants
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -438,9 +435,8 @@ const mdStyles = StyleSheet.create({
   checkTextDone: { textDecorationLine: 'line-through', color: '#94A3B8' },
 });
 
-const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+const JournalScreen: React.FC<{ navigation?: any }> = ({ navigation: _navigation }) => {
   const { entries: storeEntries, fetchEntries } = useJournalStore();
-  const privacyPrivateJournal = useSettingsStore((s) => s.settings.privacy_private_journal);
 
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [selectedMood, setSelectedMood] = useState<string>('good');
@@ -476,8 +472,8 @@ const JournalScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   >([]);
   const [activeInputText, setActiveInputText] = useState<string>('');
   const [activeFormat, setActiveFormat] = useState<FormatType | null>(null);
-  const textInputRef = useRef<TextInput>(null);
-  const editorScrollViewRef = useRef<ScrollView>(null);
+  const textInputRef = useRef<any>(null);
+  const editorScrollViewRef = useRef<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {

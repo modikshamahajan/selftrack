@@ -9,10 +9,10 @@ import {
   Animated,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  StatusBar,
   Platform,
   Image,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -140,7 +140,7 @@ const OnboardingScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+      <StatusBar style="dark" />
 
       {/* Slides */}
       <Animated.FlatList

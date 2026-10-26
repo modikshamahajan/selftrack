@@ -231,7 +231,7 @@ async def login_with_phone_pin(req: PhonePinAuthRequest, db: AsyncSession = Depe
             password_hash=hashed_pin,
             interests=json.dumps([]),
             goals=json.dumps([]),
-            total_xp=100,  # Welcome bonus
+            total_xp=100,  # Welcome bonus!
             level=1,
             streak_count=0
         )

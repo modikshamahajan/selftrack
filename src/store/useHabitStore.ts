@@ -48,7 +48,6 @@ export const getLocalTodayDateString = (d: Date = new Date()): string => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const DEFAULT_HABITS: HabitItem[] = [];
 
 const saveToStorage = async (habits: HabitItem[]) => {
   try {
@@ -110,6 +109,15 @@ export const useHabitStore = create<HabitState>((set, get) => ({
   },
 
   addHabit: async (data) => {
+    const trimmedName = (data.name || '').trim();
+    const existing = get().habits.find(
+      (h) => h.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (existing) {
+      // Habit with this title already exists; prevent duplicate and return existing
+      return existing;
+    }
+
     set({ isLoading: true });
 
     // Create local habit

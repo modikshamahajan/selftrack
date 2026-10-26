@@ -17,6 +17,7 @@ import Header from '../components/Header';
 import { useRewardsStore } from '../store/useRewardsStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useHabitStore } from '../store/useHabitStore';
+import { safeGoBack } from '../utils/navigation';
 
 const GIFT_BOX = require('../../assets/Images/giftbox.png');
 const FIRE_BADGE = require('../../assets/Images/firebadge.png');
@@ -378,7 +379,7 @@ const RewardsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
-      <Header title="Rewards" onBack={() => navigation.goBack()} />
+      <Header title="Rewards" onBack={() => safeGoBack(navigation, 'MainTabs', { screen: 'Home' })} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

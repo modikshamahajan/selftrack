@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -6,16 +6,25 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { Feather as Icon } from '@expo/vector-icons';
 import api from '../services/api';
 import { Colors } from '../theme/colors';
+import { safeGoBack } from '../utils/navigation';
 
 type Nav = StackNavigationProp<RootStackParamList, 'AdminLogin'>;
 interface Props { navigation: Nav; }
 
 const AdminLoginScreen: React.FC<Props> = ({ navigation }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@selftrack.com');
+  const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@admin_token').then((tok) => {
+      if (tok) {
+        navigation.replace('AdminDashboard');
+      }
+    }).catch(() => {});
+  }, [navigation]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -52,7 +61,7 @@ const AdminLoginScreen: React.FC<Props> = ({ navigation }) => {
     >
       <TouchableOpacity 
         style={styles.backButton} 
-        onPress={() => navigation.goBack()}
+        onPress={() => safeGoBack(navigation, 'MainTabs', { screen: 'Profile' })}
       >
         <Icon name="arrow-left" size={24} color={Colors.textPrimary} />
       </TouchableOpacity>

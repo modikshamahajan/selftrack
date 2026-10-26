@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing } from '../theme/spacing';
+import { BorderRadius } from '../theme/spacing';
 import Button from '../components/Button';
 
 // Reusable Empty State Component

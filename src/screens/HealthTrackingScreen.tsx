@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,19 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
-  StatusBar,
   Platform,
   Alert,
   Modal,
+  Keyboard,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather as Icon, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChart } from 'react-native-chart-kit';
 import { Pedometer } from 'expo-sensors';
 import * as ImagePicker from 'expo-image-picker';
-import { useHealthStore } from '../store/useHealthStore';
+import { useHealthStore, FoodItem } from '../store/useHealthStore';
 import { useMenstrualStore, calculateCycleInfo } from '../store/useMenstrualStore';
 
 const { width } = Dimensions.get('window');
@@ -50,6 +51,17 @@ const FOOD_IMAGES: any = {
   coffee: require('../../assets/Images/coffee.png'),
   tea: require('../../assets/Images/tea.png'),
   custom: require('../../assets/Images/customfood.png'),
+};
+
+export const getFoodImageSource = (imageUrl: any, foodName?: string) => {
+  if (typeof imageUrl === 'string' && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || imageUrl.startsWith('file://') || imageUrl.startsWith('data:'))) {
+    return { uri: imageUrl };
+  }
+  if (typeof imageUrl === 'number') {
+    return imageUrl;
+  }
+  const key = ((foodName || (typeof imageUrl === 'string' ? imageUrl : '')) || '').trim().toLowerCase();
+  return FOOD_IMAGES[key] || FOOD_IMAGES['custom'];
 };
 
 const INITIAL_CALORIE_DB: any = {
@@ -89,6 +101,208 @@ const getFormattedDateString = (dateTarget: Date): string => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+interface FoodLogEntryRowProps {
+  item: FoodItem;
+  onDelete: (id: string) => void;
+  onSave: (id: string, cal: number, qty: number) => void;
+}
+
+const FoodLogEntryRow: React.FC<FoodLogEntryRowProps> = ({ item, onDelete, onSave }) => {
+  const [calText, setCalText] = useState(item.calories > 0 ? String(item.calories) : '');
+  const [qty, setQty] = useState(typeof item.qty === 'number' ? item.qty : 1);
+  const [isSaved, setIsSaved] = useState(item.calories > 0);
+
+  useEffect(() => {
+    setCalText(item.calories > 0 ? String(item.calories) : '');
+    setQty(typeof item.qty === 'number' ? item.qty : 1);
+    setIsSaved(item.calories > 0);
+  }, [item.calories, item.qty]);
+
+  const handleCaloriesChange = (val: string) => {
+    const numeric = val.replace(/[^0-9]/g, '');
+    setCalText(numeric);
+    setIsSaved(false);
+  };
+
+  const handleIncreaseCal = () => {
+    const current = parseInt(calText, 10) || 0;
+    const next = current + 10;
+    setCalText(String(next));
+    setIsSaved(false);
+  };
+
+  const handleDecreaseCal = () => {
+    const current = parseInt(calText, 10) || 0;
+    const next = Math.max(0, current - 10);
+    setCalText(next > 0 ? String(next) : '0');
+    setIsSaved(false);
+  };
+
+  const handleIncreaseQty = () => {
+    setQty((prev) => {
+      const next = prev + 1;
+      setIsSaved(false);
+      return next;
+    });
+  };
+
+  const handleDecreaseQty = () => {
+    setQty((prev) => {
+      if (prev <= 0) return 0;
+      const next = prev - 1;
+      setIsSaved(false);
+      return next;
+    });
+  };
+
+  const handleSavePress = () => {
+    const parsed = parseInt(calText, 10) || 0;
+    if (parsed <= 0) return;
+    onSave(item.id, parsed, qty);
+    setIsSaved(true);
+    Keyboard.dismiss();
+  };
+
+  const numericCal = parseInt(calText, 10) || 0;
+  const isCalorieAdded = numericCal > 0;
+  const isSaveDisabled = !isCalorieAdded;
+  const totalItemCalories = numericCal * qty;
+
+  return (
+    <View style={styles.logCard}>
+      {/* Top Row: Icon, Name & Serving, Total Kcal badge, Trash Delete */}
+      <View style={styles.logCardTopRow}>
+        <Image
+          source={getFoodImageSource(item.image_url, item.name)}
+          style={styles.logItemIconBoxMini}
+          resizeMode="contain"
+        />
+
+        <View style={{ flex: 1, marginLeft: 12, paddingRight: 6 }}>
+          <Text style={styles.logItemMainName} numberOfLines={1}>{item.name}</Text>
+          <Text style={styles.logItemSubDetails}>{item.serving || '1 portion'}</Text>
+        </View>
+
+        {totalItemCalories > 0 && (
+          <View style={styles.logItemTotalBadge}>
+            <Text style={styles.logItemTotalBadgeText}>{totalItemCalories} kcal</Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.logMinusButtonCircle}
+          onPress={() => onDelete(item.id)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Delete food item"
+        >
+          <Icon name="trash-2" size={14} color="#FF6B8A" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Bottom Row: 2 Stepper Fields (Portion & Calories) + Small Save Button */}
+      <View style={styles.logCardBottomRow}>
+        {/* Field 1: Portion Stepper with + and - */}
+        <View style={styles.stepperContainer}>
+          <Text style={styles.stepperFieldLabel}>Portion</Text>
+          <View style={styles.stepperControlRow}>
+            <TouchableOpacity
+              style={[styles.stepperBtn, qty <= 0 && styles.stepperBtnDisabled]}
+              onPress={handleDecreaseQty}
+              disabled={qty <= 0}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityLabel="Decrease portion"
+            >
+              <Icon name="minus" size={11} color={qty <= 0 ? '#CBD5E1' : '#1E293B'} />
+            </TouchableOpacity>
+
+            <Text style={styles.stepperValueText}>{qty}</Text>
+
+            <TouchableOpacity
+              style={styles.stepperBtn}
+              onPress={handleIncreaseQty}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityLabel="Increase portion"
+            >
+              <Icon name="plus" size={11} color="#1E293B" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Field 2: Calories Stepper with + and - */}
+        <View style={styles.stepperContainer}>
+          <Text style={styles.stepperFieldLabel}>Calories</Text>
+          <View style={styles.stepperControlRow}>
+            <TouchableOpacity
+              style={[styles.stepperBtn, numericCal <= 0 && styles.stepperBtnDisabled]}
+              onPress={handleDecreaseCal}
+              disabled={numericCal <= 0}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityLabel="Decrease calories"
+            >
+              <Icon name="minus" size={11} color={numericCal <= 0 ? '#CBD5E1' : '#1E293B'} />
+            </TouchableOpacity>
+
+            <View style={styles.stepperInputWrap}>
+              <TextInput
+                style={styles.stepperInputField}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor="#94A3B8"
+                value={calText}
+                onChangeText={handleCaloriesChange}
+                onSubmitEditing={handleSavePress}
+                maxLength={5}
+                returnKeyType="done"
+              />
+              <Text style={styles.stepperInputUnit}>kcal</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.stepperBtn}
+              onPress={handleIncreaseCal}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityLabel="Increase calories"
+            >
+              <Icon name="plus" size={11} color="#1E293B" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Small Save Button */}
+        <TouchableOpacity
+          style={[
+            styles.smallSaveBtn,
+            isSaveDisabled
+              ? styles.smallSaveBtnDisabled
+              : isSaved
+              ? styles.smallSaveBtnDone
+              : null,
+          ]}
+          onPress={handleSavePress}
+          disabled={isSaveDisabled}
+          activeOpacity={0.8}
+          accessibilityLabel="Save food calories and portion"
+        >
+          <Icon
+            name={isSaved && isCalorieAdded ? "check" : "save"}
+            size={11}
+            color={isSaveDisabled ? "#94A3B8" : "#FFF"}
+            style={{ marginRight: 3 }}
+          />
+          <Text
+            style={[
+              styles.smallSaveBtnText,
+              isSaveDisabled && styles.smallSaveBtnTextDisabled,
+            ]}
+          >
+            {isSaved && isCalorieAdded ? "Saved" : "Save"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
   const todayStr = getFormattedDateString(new Date());
 
@@ -122,6 +336,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
   const [goalInput, setGoalInput] = useState('8');
 
   const [liveSteps, setLiveSteps] = useState(0);
+  const baselineStepsRef = useRef<number | null>(null);
 
   const [isLogExpanded, setIsLogExpanded] = useState(false);
   const [logPage, setLogPage] = useState(0);
@@ -129,11 +344,11 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customName, setCustomName] = useState('');
-  const [customQty, setCustomQty] = useState('');
-  const [customCal, setCustomCal] = useState('');
   const [customCategory, setCustomCategory] = useState('');
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [dropdownVisible, setDropdownVisible] = useState(false);
+
+
 
   useEffect(() => {
     fetchTrends();
@@ -148,33 +363,25 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
     let subscription: any = null;
     const subscribe = async () => {
       try {
-        const perm = await Pedometer.requestPermissionsAsync();
         const available = await Pedometer.isAvailableAsync();
-        if (available && perm.granted) {
-          const start = new Date();
-          start.setHours(0, 0, 0, 0);
-          let stepsCount = 0;
-          try {
-            const result = await Pedometer.getStepCountAsync(start, new Date());
-            stepsCount = result.steps || 0;
-            useHealthStore.getState().syncSteps(stepsCount);
-          } catch (e) {
-            console.log('Error fetching daily steps:', e);
-          }
-          
+        if (available) {
           try {
             subscription = Pedometer.watchStepCount((res) => {
-              console.log('Pedometer live steps update:', res.steps);
-              setLiveSteps(res.steps);
-              useHealthStore.getState().syncSteps(stepsCount + res.steps);
+              if (typeof res?.steps === 'number') {
+                if (baselineStepsRef.current === null) {
+                  // Capture device initial baseline so step counting strictly starts from 0
+                  baselineStepsRef.current = res.steps;
+                  setLiveSteps(0);
+                } else {
+                  // Only count newly taken incremental steps from the baseline
+                  const incremental = Math.max(0, res.steps - baselineStepsRef.current);
+                  setLiveSteps(incremental);
+                }
+              }
             });
-          } catch (e) {
-            console.log('Error watching live steps:', e);
-          }
+          } catch {}
         }
-      } catch (e) {
-        // Ignore permission error
-      }
+      } catch {}
     };
     subscribe();
     return () => {
@@ -182,11 +389,34 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
     };
   }, []);
 
-  const currentSteps = (metrics?.steps || 0) + (selectedDate === todayStr ? liveSteps : 0);
+  const handleSyncDeviceSteps = async () => {
+    try {
+      const perm = await Pedometer.requestPermissionsAsync();
+      const available = await Pedometer.isAvailableAsync();
+      if (available && perm.granted) {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        const result = await Pedometer.getStepCountAsync(start, new Date());
+        if (typeof result?.steps === 'number') {
+          // Reset live baseline so synced steps aren't double counted
+          baselineStepsRef.current = null;
+          setLiveSteps(0);
+          await useHealthStore.getState().syncSteps(result.steps, selectedDate);
+          Alert.alert('Steps Synced', `Successfully synced ${result.steps.toLocaleString()} steps from device sensor.`);
+        }
+      } else {
+        Alert.alert('Sensor Permission', 'Motion & fitness permission is required to sync steps.');
+      }
+    } catch {
+      Alert.alert('Sync Error', 'Could not sync steps from sensor.');
+    }
+  };
+
+  const currentSteps = Math.max(0, (metrics?.steps || 0) + (selectedDate === todayStr ? liveSteps : 0));
   const activeFoodLog = (foodLogs || []).filter(
     (item) => item.date === selectedDate || item.date?.startsWith(selectedDate)
   );
-  const totalCalories = activeFoodLog.reduce((sum, item) => sum + item.calories * item.qty, 0);
+  const totalCalories = activeFoodLog.reduce((sum, item) => sum + (item.calories || 0) * (typeof item.qty === 'number' ? item.qty : 1), 0);
   const glasses = Math.min(20, Math.max(0, metrics?.water_glasses || 0));
   const waterGoal = Math.min(20, Math.max(1, metrics?.water_goal || 8));
   const dailyGoal = metrics?.step_goal || 10000;
@@ -300,7 +530,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
     const data = days.map((d) => Math.max(0, d.steps));
     const totalSteps = data.reduce((a, b) => a + b, 0);
     const avgSteps = Math.round(totalSteps / 7);
-    const chartData = data.every((v) => v === 0) ? [0, 0, 0, 0, 0, 0, Math.max(1, currentSteps)] : data;
+    const chartData = data.every((v) => v === 0) ? [0, 0, 0, 0, 0, 0, currentSteps] : data;
 
     return {
       labels,
@@ -334,41 +564,70 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
     return currentWeekPivot.toLocaleDateString('en-US', options);
   };
 
-  const addFood = (food: string) => {
-    const normalizedFood = food.toLowerCase();
-    const existing = activeFoodLog.find((f) => f.name === normalizedFood);
-    const calories = calorieDb[normalizedFood]?.calories || 120;
-    const serving = calorieDb[normalizedFood]?.serving || '1 serving';
-    const foodImage = calorieDb[normalizedFood]?.image_url || foodLogs.find((l) => l.name?.toLowerCase() === normalizedFood && l.image_url)?.image_url;
+  const handleToggleFoodItem = (food: string) => {
+    const existing = activeFoodLog.find(
+      (item) => item.name?.trim().toLowerCase() === food.trim().toLowerCase()
+    );
+    if (existing) {
+      // Already logged -> toggle off / remove from daily log
+      useHealthStore.getState().deleteFoodLog(existing.id);
+    } else {
+      // Select food item: remove auto-added calories (calories: 0).
+      // Added to Food Log Data section so user can enter custom calories there.
+      const normalizedFood = food.toLowerCase();
+      const customImgUrl = typeof calorieDb[normalizedFood]?.image_url === 'string'
+        ? calorieDb[normalizedFood].image_url
+        : undefined;
+      const serving = calorieDb[normalizedFood]?.serving || '1 portion';
 
-    // The backend just creates a new log. We don't UPSERT locally anymore.
-    useHealthStore.getState().addFoodLog({
-      name: normalizedFood,
-      qty: 1,
-      calories,
-      serving,
-      category: selectedCategory,
-      date: selectedDate,
-      image_url: foodImage,
-    }).catch(() => {});
+      useHealthStore.getState().addFoodLog({
+        name: food,
+        qty: 1,
+        calories: 0,
+        serving: serving,
+        category: selectedCategory,
+        date: selectedDate,
+        image_url: customImgUrl,
+      });
+    }
+  };
+
+  const handleSaveLogItem = (id: string, calories: number, qty: number) => {
+    useHealthStore.getState().updateFoodLogItem(id, { calories, qty });
+  };
+
+  const handleClearAllLogs = () => {
+    Alert.alert(
+      'Clear Food Logs',
+      'Are you sure you want to remove all food items logged for this date?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: () => {
+            useHealthStore.getState().clearFoodLogsForDate(selectedDate);
+          },
+        },
+      ]
+    );
   };
 
   const handleAddCustomFood = () => {
-    const cleanName = customName.trim().toLowerCase();
-    const cleanQty = parseInt(customQty);
-    const cleanCal = parseInt(customCal);
+    const cleanName = customName.trim();
 
-    if (!cleanName || !cleanQty || !cleanCal || !customCategory) {
-      Alert.alert('Required Fields', 'All fields are compulsory.');
+    if (!cleanName || !customCategory) {
+      Alert.alert('Required Fields', 'Please enter Food Name and select a Category.');
       return;
     }
 
-    addCustomFoodItem(cleanName, cleanCal, customCategory, customImageUrl || undefined);
+    const normalizedName = cleanName.toLowerCase();
+    addCustomFoodItem(normalizedName, 0, customCategory, customImageUrl || undefined);
 
     useHealthStore.getState().addFoodLog({
       name: cleanName,
-      qty: cleanQty,
-      calories: cleanCal,
+      qty: 1,
+      calories: 0,
       serving: '1 portion',
       category: customCategory,
       date: selectedDate,
@@ -376,8 +635,6 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
     }).catch(() => {});
 
     setCustomName('');
-    setCustomQty('');
-    setCustomCal('');
     setCustomCategory('');
     setCustomImageUrl('');
     setShowCustomForm(false);
@@ -438,7 +695,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
   const visibleLogItems = isLogExpanded
     ? activeFoodLog.slice(logPage * ITEMS_PER_PAGE, (logPage + 1) * ITEMS_PER_PAGE)
-    : activeFoodLog.slice(0, 3);
+    : activeFoodLog.slice(0, 5);
 
   const totalPages = Math.ceil(activeFoodLog.length / ITEMS_PER_PAGE);
 
@@ -454,7 +711,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeAreaContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <StatusBar style="dark" />
 
       <ScrollView
         style={styles.container}
@@ -581,19 +838,27 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
                 <Text style={styles.cycleHealthBadgeText}>WOMEN'S HEALTH 🌸</Text>
                 <View style={styles.cycleHealthPhasePill}>
                   <Text style={styles.cycleHealthPhaseText}>
-                    {cycleInfo.badgeEmoji} Day {cycleInfo.cycleDay}
+                    {cycleInfo.isInitialized ? `${cycleInfo.badgeEmoji} Day ${cycleInfo.cycleDay}` : '🌸 Day 0'}
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.cycleHealthTitle}>Menstrual Cycle & Vitality</Text>
+              <Text style={styles.cycleHealthTitle}>
+                {cycleInfo.isInitialized ? 'Menstrual Cycle & Vitality' : "Women's Health 🌸"}
+              </Text>
               <Text style={styles.cycleHealthSub} numberOfLines={1}>
                 {cycleInfo.phaseDescription}
               </Text>
 
               <View style={styles.cycleHealthFooter}>
                 <Text style={styles.cycleHealthCountdown}>
-                  Next period in <Text style={{ fontWeight: '800' }}>{cycleInfo.daysUntilNextPeriod} days</Text>
+                  {cycleInfo.isInitialized && cycleInfo.daysUntilNextPeriod > 0 ? (
+                    <>
+                      Next period in <Text style={{ fontWeight: '800' }}>{cycleInfo.daysUntilNextPeriod} days</Text>
+                    </>
+                  ) : (
+                    'No cycle data entered yet'
+                  )}
                 </Text>
                 <View style={styles.cycleHealthArrowBtn}>
                   <Text style={styles.cycleHealthArrowBtnText}>Open Tracker</Text>
@@ -609,7 +874,16 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           {/* Card 1: Steps */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryCardTop}>
-              <Text style={styles.summaryLabel}>Steps</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.summaryLabel}>Steps</Text>
+                <TouchableOpacity
+                  onPress={handleSyncDeviceSteps}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Sync steps with sensor"
+                >
+                  <Icon name="refresh-cw" size={12} color="#2ECC71" />
+                </TouchableOpacity>
+              </View>
               <Image source={DASHBOARD_IMAGES.shoes} style={styles.summaryCardImage} resizeMode="contain" />
             </View>
             <Text style={[styles.summaryValue, { color: '#2ECC71' }]}>{currentSteps.toLocaleString()}</Text>
@@ -681,21 +955,22 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           {/* DYNAMIC FORM COMPONENT */}
           {showCustomForm && (
             <View style={styles.blueprintFormOutline}>
-              <Text style={styles.mandatoryWarningLabel}>* All fields are compulsory</Text>
-
               <View style={{ marginBottom: 12 }}>
                 <Text style={styles.fieldLabelText}>Food Name *</Text>
-                <TextInput placeholder="e.g. Sandwich" placeholderTextColor="#94A3B8" style={styles.formInputFieldReal} value={customName} onChangeText={setCustomName} />
+                <TextInput
+                  placeholder="e.g. Sandwich"
+                  placeholderTextColor="#94A3B8"
+                  style={styles.formInputFieldReal}
+                  value={customName}
+                  onChangeText={setCustomName}
+                />
               </View>
 
-              <View style={styles.formRowFields}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.fieldLabelText}>Quantity *</Text>
-                  <TextInput placeholder="e.g. 1" placeholderTextColor="#94A3B8" style={styles.formInputFieldReal} keyboardType="numeric" value={customQty} onChangeText={setCustomQty} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.fieldLabelText}>Calories *</Text>
-                  <TextInput placeholder="e.g. 250" placeholderTextColor="#94A3B8" style={styles.formInputFieldReal} keyboardType="numeric" value={customCal} onChangeText={setCustomCal} />
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.fieldLabelText}>Quantity</Text>
+                <View style={styles.formDefaultPortionBox}>
+                  <Text style={styles.formDefaultPortionText}>1 portion (Default)</Text>
+                  <Text style={styles.formDefaultPortionSub}>Default quantity is 1 portion. Enter calories in Food Log Data below.</Text>
                 </View>
               </View>
 
@@ -760,32 +1035,37 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           {/* FOOD SUGGESTIONS GRID PLATFORM */}
           <View style={styles.foodGridWrapper}>
             {categories[selectedCategory]?.map((food: string) => {
-              const isSelected = activeFoodLog.some(item => item.name === food);
+              const loggedItem = activeFoodLog.find(
+                (item) => item.name && food && item.name.trim().toLowerCase() === food.trim().toLowerCase()
+              );
+              const isSelected = Boolean(loggedItem);
               const customFoodImg = calorieDb[food]?.image_url || foodLogs.find(l => l.name?.toLowerCase() === food?.toLowerCase() && l.image_url)?.image_url;
 
               return (
                 <TouchableOpacity
                   key={food}
-                  activeOpacity={isSelected ? 1 : 0.7}
-                  onPress={() => !isSelected && addFood(food)}
+                  activeOpacity={0.7}
+                  onPress={() => handleToggleFoodItem(food)}
                   style={[styles.foodGridItemBox, isSelected && styles.foodGridItemBoxSelected]}
                 >
                   <Image
-                    source={customFoodImg ? { uri: customFoodImg } : (FOOD_IMAGES[food] || FOOD_IMAGES['custom'])}
+                    source={getFoodImageSource(customFoodImg, food)}
                     style={[styles.foodItemIconPlaceholder, { backgroundColor: calorieDb[food]?.color || '#FFF6E8' }]}
-                    resizeMode={customFoodImg ? "cover" : "contain"}
+                    resizeMode="contain"
                   />
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.foodItemGridTitle} numberOfLines={1}>{food}</Text>
                     <Text style={styles.foodItemGridSub}>{calorieDb[food]?.serving || '1 portion'}</Text>
-                    <Text style={styles.foodItemGridCal}>{calorieDb[food]?.calories || 100} kcal</Text>
+                    {isSelected && loggedItem && loggedItem.calories > 0 && (typeof loggedItem.qty === 'number' ? loggedItem.qty : 1) > 0 ? (
+                      <Text style={[styles.foodItemGridCal, { color: '#10B981', fontWeight: '700' }]}>
+                        {loggedItem.calories * (typeof loggedItem.qty === 'number' ? loggedItem.qty : 1)} kcal
+                      </Text>
+                    ) : null}
                   </View>
 
-                  {!isSelected && (
-                    <View style={styles.gridItemPlusButtonCircle}>
-                      <Icon name="plus" size={14} color="#FFF" />
-                    </View>
-                  )}
+                  <View style={[styles.gridItemPlusButtonCircle, isSelected && { backgroundColor: '#10B981' }]}>
+                    <Icon name={isSelected ? "check" : "plus"} size={14} color="#FFF" />
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -813,39 +1093,45 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           {/* FOOD LOG DISPLAY */}
           {activeFoodLog.length > 0 && (
             <View style={styles.logMasterSection}>
-              <TouchableOpacity
-                style={styles.logHeaderClickToggle}
-                onPress={() => { setIsLogExpanded(!isLogExpanded); setLogPage(0); }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.logSectionHeaderTitle}>Food Log Data</Text>
+              <View style={styles.logSectionHeaderRow}>
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  activeOpacity={0.7}
+                  onPress={() => { setIsLogExpanded(!isLogExpanded); setLogPage(0); }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={styles.logSectionHeaderTitle}>Food Log Data</Text>
+                    <View style={styles.arrowCollapseCircle}>
+                      <Icon name={isLogExpanded ? "chevron-up" : "chevron-down"} size={14} color="#64748B" />
+                    </View>
+                  </View>
                   <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500', marginTop: 2 }}>
-                    {isLogExpanded ? `Expanded View (${activeFoodLog.length} total)` : `Showing 3 of ${activeFoodLog.length} items`}
+                    {activeFoodLog.some(f => (f.calories || 0) === 0)
+                      ? '✍️ Enter calories for each item below'
+                      : isLogExpanded
+                      ? `Expanded View (${activeFoodLog.length} total)`
+                      : `Showing ${Math.min(5, activeFoodLog.length)} of ${activeFoodLog.length} items`}
                   </Text>
-                </View>
-                <View style={styles.arrowCollapseCircle}>
-                  <Icon name={isLogExpanded ? "chevron-up" : "chevron-down"} size={18} color="#64748B" />
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.clearAllBtn}
+                  onPress={handleClearAllLogs}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  accessibilityLabel="Clear all food items for today"
+                >
+                  <Icon name="trash-2" size={12} color="#94A3B8" style={{ marginRight: 4 }} />
+                  <Text style={styles.clearAllBtnText}>Clear All</Text>
+                </TouchableOpacity>
+              </View>
 
               {visibleLogItems.map((item, index) => (
-                <View key={index} style={styles.logRowItem}>
-                  <Image source={item.image_url ? { uri: item.image_url } : (FOOD_IMAGES[item.name] || FOOD_IMAGES['custom'])} style={styles.logItemIconBoxMini} resizeMode="cover" />
-
-                  <View style={{ flex: 1, marginLeft: 12, paddingRight: 4 }}>
-                    <Text style={styles.logItemMainName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.logItemSubDetails}>{item.serving}</Text>
-                  </View>
-
-                  <Text style={styles.logItemCalCounter}>{item.calories * item.qty} kcal</Text>
-
-                  <View style={styles.logActionButtonsContainer}>
-                    <Text style={[styles.logItemQtyText, { marginRight: 12 }]}>x {item.qty}</Text>
-                    <TouchableOpacity style={styles.logMinusButtonCircle} onPress={() => handleDeleteLog(item.id)}>
-                      <Icon name="trash-2" size={14} color="#FF6B8A" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                <FoodLogEntryRow
+                  key={item.id || index}
+                  item={item}
+                  onDelete={handleDeleteLog}
+                  onSave={handleSaveLogItem}
+                />
               ))}
 
               {isLogExpanded && activeFoodLog.length > ITEMS_PER_PAGE && (
@@ -1149,6 +1435,8 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           </View>
         </View>
       </Modal>
+
+      {/* PORTION & CALORIE LOG MODAL removed: inline calorie input in Food Log Data used directly */}
     </SafeAreaView>
   );
 };
@@ -1336,6 +1624,9 @@ const styles = StyleSheet.create({
   mandatoryWarningLabel: { fontSize: 11, color: '#FF4D4F', fontWeight: '600', marginBottom: 12 },
   fieldLabelText: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 6 },
   formInputFieldReal: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 12, height: 44, color: '#1E293B', fontSize: 14 },
+  formDefaultPortionBox: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  formDefaultPortionText: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
+  formDefaultPortionSub: { fontSize: 11, color: '#64748B', marginTop: 2, fontWeight: '500' },
   formRowFields: { flexDirection: 'row', marginBottom: 12 },
   dropdownSelectorTriggerField: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 12, height: 44, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   dropdownSelectorValueText: { fontSize: 14, color: '#1E293B' },
@@ -1349,17 +1640,162 @@ const styles = StyleSheet.create({
   modalOptionText: { fontSize: 14, fontWeight: '600', color: '#334155' },
 
   logMasterSection: { marginTop: 20, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 },
-  logHeaderClickToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  logSectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
   logSectionHeaderTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
-  logRowItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  clearAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  clearAllBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  logCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  logCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    gap: 6,
+  },
   logItemIconBoxMini: { width: 32, height: 32 },
   logItemMainName: { fontSize: 14, fontWeight: '700', color: '#1E293B', textTransform: 'capitalize' },
   logItemSubDetails: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
-  logItemCalCounter: { fontSize: 13, fontWeight: '700', color: '#475569', marginRight: 12 },
-  logActionButtonsContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logMinusButtonCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFF5F6', borderWidth: 1, borderColor: '#FFE4E8', justifyContent: 'center', alignItems: 'center' },
-  logPlusButtonCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E9FFF1', borderWidth: 1, borderColor: '#C8F7D2', justifyContent: 'center', alignItems: 'center' },
-  logItemQtyText: { fontSize: 14, fontWeight: '700', color: '#1E293B', minWidth: 14, textAlign: 'center' },
+  logItemTotalBadge: {
+    backgroundColor: '#E9FFF1',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  logItemTotalBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  stepperContainer: {
+    alignItems: 'flex-start',
+  },
+  stepperFieldLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  stepperControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    paddingVertical: 2,
+    height: 32,
+  },
+  stepperBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 5,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  stepperBtnDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.4,
+  },
+  stepperValueText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    minWidth: 22,
+    textAlign: 'center',
+  },
+  stepperInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  stepperInputField: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    minWidth: 32,
+    textAlign: 'right',
+    padding: 0,
+    marginRight: 2,
+  },
+  stepperInputUnit: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginRight: 4,
+  },
+  smallSaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F6',
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    height: 32,
+    alignSelf: 'flex-end',
+  },
+  smallSaveBtnDone: {
+    backgroundColor: '#10B981',
+  },
+  smallSaveBtnDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  smallSaveBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  smallSaveBtnTextDisabled: {
+    color: '#94A3B8',
+  },
+  logMinusButtonCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#FFF5F6', borderWidth: 1, borderColor: '#FFE4E8', justifyContent: 'center', alignItems: 'center' },
 
   uiPaginationRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 },
   uiPagerNavButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' },

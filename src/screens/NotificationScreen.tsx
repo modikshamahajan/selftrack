@@ -14,13 +14,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing, Shadow } from '../theme/spacing';
+import { BorderRadius, Shadow } from '../theme/spacing';
 import { getScreenBgColor } from '../theme/screenBgColors';
 import Header from '../components/Header';
 import Toggle from '../components/Toggle';
 import CreateEditEventModal from '../components/CreateEditEventModal';
 import CelebrationModal from '../components/CelebrationModal';
-import { useNotificationStore, AppNotification } from '../store/useNotificationStore';
+import { safeGoBack } from '../utils/navigation';
+import { useNotificationStore } from '../store/useNotificationStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useSpecialEventStore } from '../store/useSpecialEventStore';
 import {
@@ -126,8 +127,11 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
     return null;
   }, [events]);
 
+  const [presetEventType, setPresetEventType] = useState<SpecialEventType | undefined>();
+
   const handleOpenAddModal = (presetType?: SpecialEventType) => {
     setEditingEvent(null);
+    setPresetEventType(presetType);
     setModalVisible(true);
   };
 
@@ -191,7 +195,7 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
     <SafeAreaView edges={['top', 'bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
       <Header
         title="Notifications & Events"
-        onBack={() => navigation.goBack()}
+        onBack={() => safeGoBack(navigation, 'MainTabs', { screen: 'Home' })}
         rightAction={
           activeTab === 'inbox' ? (
             <TouchableOpacity
@@ -651,6 +655,7 @@ const NotificationScreen: React.FC<{ navigation: any; route?: any }> = ({
         onClose={() => setModalVisible(false)}
         onSave={handleSaveModal}
         initialEvent={editingEvent}
+        initialEventType={presetEventType}
       />
 
       {/* Celebrative On-Screen Modal */}

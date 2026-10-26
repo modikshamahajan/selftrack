@@ -15,9 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather as Icon } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Typography } from '../theme/typography';
-import { BorderRadius, Spacing } from '../theme/spacing';
+import { BorderRadius } from '../theme/spacing';
 import { getScreenBgColor } from '../theme/screenBgColors';
 import Header from '../components/Header';
+import { safeGoBack } from '../utils/navigation';
 import api from '../services/api';
 
 interface Message {
@@ -156,7 +157,7 @@ const AIChatScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     >
       <Header
         title="AI Companion"
-        onBack={() => navigation.goBack()}
+        onBack={() => safeGoBack(navigation, 'MainTabs', { screen: 'Home' })}
         rightAction={
           <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
             <Icon name="sliders" size={20} color={Colors.textSecondary} />
@@ -196,7 +197,7 @@ const AIChatScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 <Text style={styles.thinkingText}>Thinking...</Text>
               </View>
             </View>
-          ) : null
+          ) : undefined
         }
       />
 

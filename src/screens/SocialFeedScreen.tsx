@@ -13,12 +13,11 @@ import {
   Share,
   Alert,
   Image,
-  Dimensions,
-  StatusBar,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather as Icon, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather as Icon, Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -28,16 +27,12 @@ import Animated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '../theme/colors';
-import { Typography } from '../theme/typography';
-import { BorderRadius, Shadow } from '../theme/spacing';
+import { Shadow } from '../theme/spacing';
 import Card from '../components/Card';
 import FloatingActionButton from '../components/FloatingActionButton';
 import Button from '../components/Button';
 import { useSocialStore, FeedPost } from '../store/useSocialStore';
 import { useAuthStore } from '../store/useAuthStore';
-
-const { width } = Dimensions.get('window');
 
 // Bouncy animated heart for reactions
 const AnimatedHeart = ({
@@ -221,7 +216,6 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const {
     posts,
     stories,
-    isLoading,
     fetchFeed,
     createPost,
     likePost,
@@ -285,14 +279,17 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const activeUserStories = useMemo(() => {
     if (!viewingStoryUser) return [];
+    const now = Date.now();
+    const validStories = stories.filter((s) => !s.expiresAt || s.expiresAt > now);
     if (isCurrentUser(viewingStoryUser)) {
-      return stories.filter((s) => isCurrentUser(s.user)).reverse();
+      return validStories.filter((s) => isCurrentUser(s.user)).reverse();
     }
-    return stories.filter((s) => s.user === viewingStoryUser).reverse();
+    return validStories.filter((s) => s.user === viewingStoryUser).reverse();
   }, [viewingStoryUser, stories, user?.name]);
 
   const myActiveStories = useMemo(() => {
-    return stories.filter((s) => isCurrentUser(s.user));
+    const now = Date.now();
+    return stories.filter((s) => (!s.expiresAt || s.expiresAt > now) && isCurrentUser(s.user));
   }, [stories, user?.name]);
 
   // Story auto-advance timer
@@ -369,7 +366,12 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const handleCreateStory = () => {
     if (!storyText.trim() && !storyImage) return;
-    addStory(storyText.trim(), user?.name || 'Explorer', storyImage || undefined);
+    addStory(
+      storyText.trim(),
+      user?.name || 'Explorer',
+      storyImage || undefined,
+      user?.avatar_url || undefined
+    );
     setStoryText('');
     setStoryImage(null);
     setStoryModalVisible(false);
@@ -477,38 +479,11 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     return result;
   }, [posts, searchQuery, selectedCategory]);
 
-  const communityMembers = useMemo(() => {
-    const seen = new Set<string>();
-    const result: { name: string; fullName: string; emoji: string; avatar?: string }[] = [];
-    const emojis = ['🌟', '🔥', '⚡', '💪', '🏆', '🎯', '🌿', '💎'];
-
-    // Collect distinct other members from feed posts
-    posts.forEach((p) => {
-      if (!p.user || isCurrentUser(p.user)) return;
-      const firstName = p.user.split(' ')[0];
-      if (!seen.has(firstName) && result.length < 8) {
-        seen.add(firstName);
-        const isUrl = Boolean(
-          p.avatar &&
-            (p.avatar.startsWith('http://') ||
-              p.avatar.startsWith('https://') ||
-              p.avatar.startsWith('file://'))
-        );
-        result.push({
-          name: firstName,
-          fullName: p.user,
-          emoji: !isUrl && p.avatar && p.avatar.length <= 4 ? p.avatar : emojis[result.length % emojis.length],
-          avatar: isUrl ? p.avatar : undefined,
-        });
-      }
-    });
-
-    return result;
-  }, [posts, user?.name]);
-
   const groupedStories = useMemo(() => {
+    const now = Date.now();
+    const activeStories = stories.filter((s) => !s.expiresAt || s.expiresAt > now);
     const groups: Record<string, typeof stories> = {};
-    stories.forEach((s) => {
+    activeStories.forEach((s) => {
       if (!groups[s.user]) groups[s.user] = [];
       groups[s.user].push(s);
     });
@@ -523,13 +498,20 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     if (isCurrentUser(viewingStoryUser)) {
       return { emoji: '🌟', avatar: user?.avatar_url };
     }
-    const found = communityMembers.find((u) => viewingStoryUser.startsWith(u.name));
-    return found || { emoji: '🌟', avatar: undefined };
-  }, [viewingStoryUser, communityMembers, user?.avatar_url]);
+    const currentStory = activeUserStories[currentStoryIndex];
+    if (currentStory?.user_avatar) {
+      return { emoji: '🌟', avatar: currentStory.user_avatar };
+    }
+    const postFromUser = posts.find((p) => p.user === viewingStoryUser);
+    if (postFromUser?.avatar) {
+      return { emoji: '🌟', avatar: postFromUser.avatar };
+    }
+    return { emoji: '🌟', avatar: undefined };
+  }, [viewingStoryUser, activeUserStories, currentStoryIndex, user?.avatar_url, posts]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFF1F2" />
+      <StatusBar style="dark" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -763,7 +745,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             {groupedStories
               .filter((group) => !isCurrentUser(group.user))
               .map((group) => {
-                const foundUser = communityMembers.find((u) => u.fullName.startsWith(group.user) || group.user.startsWith(u.name));
+                const firstStory = group.stories[0];
                 return (
                   <TouchableOpacity
                     key={group.user}
@@ -775,8 +757,8 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     activeOpacity={0.8}
                   >
                     <StoryAvatar
-                      avatar={foundUser?.avatar}
-                      emoji={foundUser?.emoji}
+                      avatar={firstStory?.user_avatar}
+                      emoji="🌟"
                       hasUnread={true}
                     />
                     <Text style={styles.storyLabel} numberOfLines={1}>
@@ -786,24 +768,14 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 );
               })}
 
-            {/* Other Community Members (never duplicates current user) */}
-            {communityMembers
-              .filter((u) => !groupedStories.some((g) => g.user.startsWith(u.name) || u.fullName.startsWith(g.user)))
-              .map((u, i) => (
-                <TouchableOpacity
-                  key={`member-${u.name}-${i}`}
-                  style={styles.storyItem}
-                  onPress={() => {
-                    Alert.alert(u.name, `Cheer on ${u.fullName} for sharing their healthy journey!`);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <StoryAvatar avatar={u.avatar} emoji={u.emoji} hasUnread={false} />
-                  <Text style={styles.storyLabel} numberOfLines={1}>
-                    {u.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* If no other stories exist yet, show subtle empty indicator */}
+            {groupedStories.filter((group) => !isCurrentUser(group.user)).length === 0 && (
+              <View style={styles.noStoriesPrompt}>
+                <Text style={styles.noStoriesPromptText}>
+                  No other stories yet • Tap + to share your win!
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </View>
 
@@ -884,7 +856,7 @@ const SocialFeedScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               </TouchableOpacity>
             </View>
           ) : (
-            filteredPosts.map((post, index) => {
+            filteredPosts.map((post) => {
               const meta = getAchievementMeta(post.achievement);
               return (
                 <Card key={post.id} style={styles.postCard}>
@@ -1725,6 +1697,23 @@ const styles = StyleSheet.create({
   storiesBarContent: {
     paddingHorizontal: 20,
     gap: 16,
+    alignItems: 'center',
+  },
+  noStoriesPrompt: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    alignSelf: 'center',
+  },
+  noStoriesPromptText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3B82F6',
   },
   storyItem: {
     alignItems: 'center',
