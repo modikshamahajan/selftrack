@@ -50,6 +50,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
   const [fieldErrorMessages, setFieldErrorMessages] = useState<{ [key: string]: string }>({});
 
   const scrollViewRef = useRef<any>(null);
+  const phoneInputRef = useRef<any>(null);
+  const pinInputRef = useRef<any>(null);
+  const confirmPinInputRef = useRef<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -368,15 +371,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
       >
         <ScrollView
           ref={scrollViewRef}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 48 },
-          ]}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          keyboardDismissMode="none"
           nestedScrollEnabled={true}
-          overScrollMode="always"
         >
           {/* Header Botanical Illustration */}
           <View style={[styles.headerImageContainer, keyboardHeight > 0 && { marginTop: 0, marginBottom: 0 }]}>
@@ -538,11 +537,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                       placeholderTextColor="#94A3B8"
                       value={fullName}
                       editable={!isLoading}
-                      onFocus={() => {
-                        setTimeout(() => {
-                          scrollViewRef.current?.scrollTo({ y: 40, animated: true });
-                        }, 150);
-                      }}
                       onChangeText={(text) => {
                         setFullName(text);
                         if (activeErrorField === 'name') setActiveErrorField(null);
@@ -550,6 +544,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                       }}
                       autoCapitalize="words"
                       returnKeyType="next"
+                      onSubmitEditing={() => phoneInputRef.current?.focus()}
                     />
                   </View>
                   {activeErrorField === 'name' && !!fieldErrorMessages.name && (
@@ -574,16 +569,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                     <View style={styles.codeDivider} />
                   </View>
                   <TextInput
+                    ref={phoneInputRef}
                     style={[styles.textInput, isLoading && styles.inputDisabled]}
                     placeholder="98765 43210"
                     placeholderTextColor="#94A3B8"
                     value={phoneNumber}
                     editable={!isLoading}
-                    onFocus={() => {
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollTo({ y: 110, animated: true });
-                      }, 150);
-                    }}
                     onChangeText={(t) => {
                       setPhoneNumber(t.replace(/\D/g, '').slice(0, 10));
                       if (activeErrorField === 'phone') setActiveErrorField(null);
@@ -591,7 +582,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                     }}
                     keyboardType="phone-pad"
                     maxLength={10}
-                    returnKeyType={authMode === 'register' ? 'next' : 'done'}
+                    returnKeyType="next"
+                    onSubmitEditing={() => pinInputRef.current?.focus()}
                   />
                   {digitsOnly.length === 10 && (
                     <Icon name="check-circle" size={17} color="#10B981" style={{ marginRight: 6 }} />
@@ -619,16 +611,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                 >
                   <Icon name="lock" size={18} color="#059669" style={styles.fieldIcon} />
                   <TextInput
+                    ref={pinInputRef}
                     style={[styles.textInput, styles.pinInput, isLoading && styles.inputDisabled]}
                     placeholder="••••"
                     placeholderTextColor="#CBD5E1"
                     value={pin.slice(0, 4)}
                     editable={!isLoading}
-                    onFocus={() => {
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 150);
-                    }}
                     onChangeText={(t) => {
                       const sanitized = t.replace(/\D/g, '').slice(0, 4);
                       setPin(sanitized);
@@ -639,7 +627,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                     secureTextEntry={!showPin}
                     maxLength={4}
                     returnKeyType={authMode === 'register' ? 'next' : 'done'}
-                    onSubmitEditing={handlePhonePinAuth}
+                    onSubmitEditing={() => {
+                      if (authMode === 'register') {
+                        confirmPinInputRef.current?.focus();
+                      } else {
+                        handlePhonePinAuth();
+                      }
+                    }}
                   />
                   <TouchableOpacity
                     onPress={() => setShowPin(!showPin)}
@@ -681,16 +675,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                   >
                     <Icon name="shield" size={18} color="#059669" style={styles.fieldIcon} />
                     <TextInput
+                      ref={confirmPinInputRef}
                       style={[styles.textInput, styles.pinInput, isLoading && styles.inputDisabled]}
                       placeholder="••••"
                       placeholderTextColor="#CBD5E1"
                       value={confirmPin.slice(0, 4)}
                       editable={!isLoading}
-                      onFocus={() => {
-                        setTimeout(() => {
-                          scrollViewRef.current?.scrollToEnd({ animated: true });
-                        }, 150);
-                      }}
                       onChangeText={(t) => {
                         const sanitized = t.replace(/\D/g, '').slice(0, 4);
                         setConfirmPin(sanitized);
@@ -801,6 +791,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
+    paddingBottom: 28,
     flexGrow: 1,
   },
   headerImageContainer: {
