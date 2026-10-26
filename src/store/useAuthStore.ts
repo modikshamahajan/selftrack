@@ -55,11 +55,33 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   initializeAuth: async () => {
     set({ isLoading: true });
     try {
+      // First-launch fresh start check: ensure clean state on install
+      const hasFreshStart = await AsyncStorage.getItem('@selftrack_fresh_install_v1');
+      if (!hasFreshStart) {
+        await AsyncStorage.multiRemove([
+          'userToken',
+          'userProfile',
+          'refreshToken',
+          'isGuestMode',
+          'selftrack_registered_users',
+        ]);
+        await resetAppDataForNewUser();
+        await AsyncStorage.setItem('@selftrack_fresh_install_v1', 'true');
+        set({ user: null, token: null, isAuthenticated: false, isLoading: false });
+        return false;
+      }
+
       const [token, userProfileRaw] = await AsyncStorage.multiGet(['userToken', 'userProfile']);
       const storedToken = token[1];
       const storedUser = userProfileRaw[1] ? JSON.parse(userProfileRaw[1]) : null;
 
-      if (storedToken && storedUser) {
+      // Do not auto-login guest users on app launch; require explicit sign-in/registration
+      if (
+        storedToken &&
+        storedUser &&
+        storedUser.id !== 'local_guest_user' &&
+        storedToken !== 'local_guest_token'
+      ) {
         set({ user: storedUser, token: storedToken, isAuthenticated: true, isLoading: false });
         return true;
       }

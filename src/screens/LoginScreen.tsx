@@ -17,17 +17,25 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather as Icon } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { RouteProp } from '@react-navigation/native';
 import { Typography } from '../theme/typography';
 import { BorderRadius, Shadow } from '../theme/spacing';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuthStore } from '../store/useAuthStore';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
+type LoginRouteProp = RouteProp<RootStackParamList, 'Login'>;
 
 const HEADER_LEAF = require('../../assets/Images/headerleaf.png');
 
-const LoginScreen: React.FC<{ navigation: NavigationProp }> = ({ navigation }) => {
-  const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
+interface LoginScreenProps {
+  navigation: NavigationProp;
+  route?: LoginRouteProp;
+}
+
+const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
+  const initialMode = route?.params?.initialMode || 'register';
+  const [authMode, setAuthMode] = useState<'signin' | 'register'>(initialMode);
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const countryCode = '+91';

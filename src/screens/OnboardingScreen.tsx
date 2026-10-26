@@ -95,13 +95,12 @@ const OnboardingScreen: React.FC<Props> = ({ navigation }) => {
       flatListRef.current?.scrollToIndex({ index: next, animated: true });
       setCurrentIndex(next);
     } else {
-      navigation.replace('Login');
+      navigation.replace('Login', { initialMode: 'register' });
     }
   };
 
-  const handleSkip = async () => {
-    await useAuthStore.getState().continueAsGuest();
-    navigation.replace('MainTabs');
+  const handleSkip = () => {
+    navigation.replace('Login', { initialMode: 'register' });
   };
 
   // ── Dots ──────────────────────────────────────────────────────────────────

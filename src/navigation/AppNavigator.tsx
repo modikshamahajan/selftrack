@@ -30,7 +30,7 @@ import MenstrualCycleScreen from '../screens/MenstrualCycleScreen';
 export type RootStackParamList = {
   Splash: undefined;
   Onboarding: undefined;
-  Login: undefined;
+  Login: undefined | { initialMode?: 'signin' | 'register' };
   MainTabs: undefined | { screen?: string; showWelcomeBonus?: boolean };
   AIChat: undefined;
   HabitTracker: undefined;
