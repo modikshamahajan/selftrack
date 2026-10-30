@@ -93,7 +93,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
       } catch {}
       setAuthMode(mode);
       clearFormFields();
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      }, 50);
     }
+  };
+
+  const scrollToFocusedField = (field: 'phone' | 'pin' | 'confirmPin') => {
+    if (!scrollViewRef.current) return;
+    setTimeout(() => {
+      if (field === 'pin') {
+        scrollViewRef.current?.scrollTo({ y: authMode === 'register' ? 200 : 120, animated: true });
+      } else if (field === 'confirmPin') {
+        scrollViewRef.current?.scrollTo({ y: 280, animated: true });
+      } else if (field === 'phone') {
+        scrollViewRef.current?.scrollTo({ y: authMode === 'register' ? 100 : 40, animated: true });
+      }
+    }, 120);
   };
 
   const validateForm = (): boolean => {
@@ -367,8 +383,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardContainer}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-        enabled={Platform.OS === 'ios'}
       >
         <ScrollView
           ref={scrollViewRef}
@@ -376,7 +390,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
+          bounces={true}
+          alwaysBounceVertical={false}
         >
           {/* Header Botanical Illustration */}
           <View style={[styles.headerImageContainer, keyboardHeight > 0 && { marginTop: 0, marginBottom: 0 }]}>
@@ -576,6 +592,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                     placeholderTextColor="#94A3B8"
                     value={phoneNumber}
                     editable={!isLoading}
+                    onFocus={() => scrollToFocusedField('phone')}
                     onChangeText={(t) => {
                       setPhoneNumber(t.replace(/\D/g, '').slice(0, 10));
                       if (activeErrorField === 'phone') setActiveErrorField(null);
@@ -618,6 +635,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                     placeholderTextColor="#CBD5E1"
                     value={pin.slice(0, 4)}
                     editable={!isLoading}
+                    onFocus={() => scrollToFocusedField('pin')}
                     onChangeText={(t) => {
                       const sanitized = t.replace(/\D/g, '').slice(0, 4);
                       setPin(sanitized);
@@ -682,6 +700,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, route }) => {
                       placeholderTextColor="#CBD5E1"
                       value={confirmPin.slice(0, 4)}
                       editable={!isLoading}
+                      onFocus={() => scrollToFocusedField('confirmPin')}
                       onChangeText={(t) => {
                         const sanitized = t.replace(/\D/g, '').slice(0, 4);
                         setConfirmPin(sanitized);
@@ -795,7 +814,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 36,
+    paddingBottom: 24,
     flexGrow: 1,
   },
   headerImageContainer: {

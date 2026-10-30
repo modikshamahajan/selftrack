@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Keyboard } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -17,13 +17,31 @@ const AdminLoginScreen: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates?.height || 280);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem('@admin_token').then((tok) => {
       if (tok) {
         navigation.replace('AdminDashboard');
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, [navigation]);
 
   const handleLogin = async () => {
@@ -36,9 +54,9 @@ const AdminLoginScreen: React.FC<Props> = ({ navigation }) => {
     setError('');
 
     try {
-      const { data } = await api.post('/admin/login', { 
-        email: email.trim(), 
-        password: password.trim() 
+      const { data } = await api.post('/admin/login', {
+        email: email.trim(),
+        password: password.trim()
       });
       await AsyncStorage.setItem('@admin_token', data.access_token);
       navigation.replace('AdminDashboard');
@@ -55,70 +73,76 @@ const AdminLoginScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <TouchableOpacity 
-        style={styles.backButton} 
-        onPress={() => safeGoBack(navigation, 'MainTabs', { screen: 'Profile' })}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Icon name="arrow-left" size={24} color={Colors.textPrimary} />
-      </TouchableOpacity>
-
-      <View style={styles.formContainer}>
-        <View style={styles.header}>
-          <Icon name="shield" size={48} color={Colors.primary} />
-          <Text style={styles.title}>Admin Portal</Text>
-          <Text style={styles.subtitle}>Secure Access Only</Text>
-        </View>
-
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Admin Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="admin@selftrack.com"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity 
-              style={styles.eyeIcon} 
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              <Icon name={showPassword ? "eye" : "eye-off"} size={20} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity 
-          style={styles.loginButton}
-          onPress={handleLogin}
-          disabled={loading}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => safeGoBack(navigation, 'MainTabs', { screen: 'Profile' })}
         >
-          {loading ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <Text style={styles.loginText}>Sign In</Text>
-          )}
+          <Icon name="arrow-left" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
-      </View>
+
+        <View style={styles.formContainer}>
+          <View style={styles.header}>
+            <Icon name="shield" size={48} color={Colors.primary} />
+            <Text style={styles.title}>Admin Portal</Text>
+            <Text style={styles.subtitle}>Secure Access Only</Text>
+          </View>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Admin Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="admin@selftrack.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="••••••••"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Icon name={showPassword ? "eye" : "eye-off"} size={20} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.loginText}>Sign In</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -128,9 +152,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingTop: 60,
+    paddingBottom: 24,
+  },
   backButton: {
     position: 'absolute',
-    top: 50,
+    top: 20,
     left: 20,
     zIndex: 10,
     padding: 10,
