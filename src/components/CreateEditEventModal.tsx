@@ -210,7 +210,7 @@ const CreateEditEventModal: React.FC<CreateEditEventModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalOverlay}
       >
         <View style={[styles.modalContainer, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}>

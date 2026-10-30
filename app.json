@@ -2,7 +2,7 @@
   "expo": {
     "name": "SelfTrack",
     "slug": "selftrack",
-    "version": "1.0.1",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -28,7 +28,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.selftrack.app",
-      "versionCode": 6,
+      "versionCode": 9,
       "usesCleartextTraffic": true,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [

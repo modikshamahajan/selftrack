@@ -12,6 +12,7 @@ import {
   Alert,
   Modal,
   Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -337,6 +338,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
   const [liveSteps, setLiveSteps] = useState(0);
   const baselineStepsRef = useRef<number | null>(null);
+  const mainScrollViewRef = useRef<any>(null);
 
   const [isLogExpanded, setIsLogExpanded] = useState(false);
   const [logPage, setLogPage] = useState(0);
@@ -713,11 +715,17 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
     <SafeAreaView edges={['top']} style={styles.safeAreaContainer}>
       <StatusBar style="dark" />
 
-      <ScrollView
-        style={styles.container}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContentContainer}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
+        <ScrollView
+          ref={mainScrollViewRef}
+          style={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContentContainer}
+        >
         {/* TOP SLEEK LIGHT COLOR PANEL (Pastel Emerald, Mint & Soft Sky) */}
         <View style={styles.heroWrapper}>
           <LinearGradient
@@ -945,7 +953,18 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             </View>
 
             <View style={styles.headerControlActionsBox}>
-              <TouchableOpacity style={styles.customFoodBadgeButton} onPress={() => setShowCustomForm(!showCustomForm)}>
+              <TouchableOpacity
+                style={styles.customFoodBadgeButton}
+                onPress={() => {
+                  const nextState = !showCustomForm;
+                  setShowCustomForm(nextState);
+                  if (nextState) {
+                    setTimeout(() => {
+                      mainScrollViewRef.current?.scrollTo({ y: 560, animated: true });
+                    }, 120);
+                  }
+                }}
+              >
                 <Icon name={showCustomForm ? "minus" : "plus"} size={14} color="#FF6B8A" />
                 <Text style={styles.customFoodBadgeButtonText}>Custom Food</Text>
               </TouchableOpacity>
@@ -963,6 +982,11 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
                   style={styles.formInputFieldReal}
                   value={customName}
                   onChangeText={setCustomName}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      mainScrollViewRef.current?.scrollTo({ y: 620, animated: true });
+                    }, 120);
+                  }}
                 />
               </View>
 
@@ -1328,10 +1352,14 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
           </View>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Interactive Sleep Logging Modal */}
       <Modal visible={sleepModalVisible} transparent animationType="slide">
-        <View style={styles.sleepModalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.sleepModalOverlay}
+        >
           <View style={styles.sleepModalCard}>
             <View style={styles.sleepModalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1433,7 +1461,7 @@ const HealthTrackingScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* PORTION & CALORIE LOG MODAL removed: inline calorie input in Food Log Data used directly */}

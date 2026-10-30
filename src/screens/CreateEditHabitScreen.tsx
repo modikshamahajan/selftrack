@@ -9,9 +9,11 @@ import {
     Dimensions,
     Image,
     ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import {
     Ionicons,
@@ -86,6 +88,7 @@ const streakTargets = [3, 7, 14, 21, 30, 60, 90];
 const CreateEditHabitScreen = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const insets = useSafeAreaInsets();
     const existingHabit = route.params?.habit;
 
     const [title, setTitle] = useState(existingHabit?.name ?? '');
@@ -216,13 +219,21 @@ const CreateEditHabitScreen = () => {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F7FAF8' }} edges={['top', 'bottom']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F7FAF8' }} edges={['top']}>
             <StatusBar style="dark" />
 
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.container}
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
             >
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={[
+                        styles.container,
+                        { paddingBottom: Math.max(insets.bottom, 24) + 60 },
+                    ]}
+                >
                 {/* TOP HEADER */}
                 <View style={styles.topRow}>
                     <TouchableOpacity style={styles.roundButton} onPress={handleCancel}>
@@ -816,6 +827,7 @@ const CreateEditHabitScreen = () => {
                     </TouchableOpacity>
                 </View>
             </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 };

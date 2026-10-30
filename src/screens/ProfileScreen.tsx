@@ -470,7 +470,7 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({
       >
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.modalKeyboardAvoid}
           >
             <View style={styles.modalCard}>

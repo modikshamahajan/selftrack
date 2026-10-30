@@ -9,6 +9,7 @@ import {
   Modal,
   Platform,
   Dimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -320,10 +321,15 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
         </View>
       )}
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
+        >
         {/* ===================== HERO CYCLE DIAL CARD ===================== */}
         <LinearGradient
           colors={['#FFF1F2', '#FFE4E6', '#FCE7F3']}
@@ -728,6 +734,7 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
         {/* Generous bottom spacing spacer ensuring complete clearance above Android navigation bar */}
         <View style={{ height: Platform.OS === 'android' ? 44 : 20 }} />
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* ===================== SETTINGS & SETUP MODAL ===================== */}
       <Modal
@@ -736,7 +743,10 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
         animationType="slide"
         onRequestClose={() => setSettingsModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalBackdrop}
+        >
           <View
             style={[
               styles.modalSheet,
@@ -856,7 +866,7 @@ const MenstrualCycleScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
